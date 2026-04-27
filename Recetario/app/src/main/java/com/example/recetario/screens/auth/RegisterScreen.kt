@@ -24,9 +24,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.AuthRepository
+import com.example.recetario.ui.theme.RecetarioTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -259,5 +261,16 @@ private fun isValidBirthDate(date: String): Boolean {
         !parsedDate.after(Date())
     } catch (exception: Exception) {
         false
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun RegisterScreenPreview() {
+    RecetarioTheme {
+        RegisterScreen(
+            onRegisterClick = {},
+            onLoginClick = {}
+        )
     }
 }

@@ -154,6 +154,9 @@ fun AppNavigation() {
                 },
                 onEditRecipeClick = { recipeId ->
                     navController.navigate(Routes.RecipeEdit.createRoute(recipeId))
+                },
+                onViewRecipeClick = { recipeId ->
+                    navController.navigate(Routes.RecipeDetail.createRoute(recipeId))
                 }
             )
         }

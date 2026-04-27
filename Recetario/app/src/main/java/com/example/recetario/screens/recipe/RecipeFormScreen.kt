@@ -35,14 +35,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.RecipeRepository
+import com.example.recetario.data.saveBitmapToInternalStorage
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.AuthTextField
 import com.example.recetario.screens.auth.OrangeButton
 import com.example.recetario.screens.auth.RecetarioOrange
+import com.example.recetario.ui.theme.RecetarioTheme
 
 @Composable
 fun RecipeFormScreen(
@@ -106,6 +109,27 @@ fun RecipeFormScreen(
             }
 
             imageUri = uri.toString()
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap == null) {
+            errorMessage = "No se pudo capturar la fotografía."
+        } else {
+            val savedImageUri = saveBitmapToInternalStorage(
+                context = context,
+                bitmap = bitmap,
+                filePrefix = "recipe"
+            )
+
+            if (savedImageUri == null) {
+                errorMessage = "No se pudo guardar la fotografía capturada."
+            } else {
+                imageUri = savedImageUri
+                errorMessage = null
+            }
         }
     }
 
@@ -364,6 +388,20 @@ fun RecipeFormScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = {
+                cameraLauncher.launch(null)
+            }
+        ) {
+            Text(
+                text = "Tomar foto con cámara",
+                color = RecetarioOrange,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         Spacer(modifier = Modifier.height(22.dp))
 
         AuthTextField(
@@ -553,5 +591,16 @@ private fun SwitchOption(
                 color = Color.DarkGray
             )
         }
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun RecipeFormScreenPreview() {
+    RecetarioTheme {
+        RecipeFormScreen(
+            onSaved = {},
+            onCancel = {}
+        )
     }
 }

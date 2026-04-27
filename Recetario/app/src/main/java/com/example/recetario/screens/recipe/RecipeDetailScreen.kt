@@ -25,12 +25,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.RecipeRepository
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.OrangeButton
 import com.example.recetario.screens.auth.RecetarioOrange
+import com.example.recetario.ui.theme.RecetarioTheme
 import java.util.Locale
 
 @Composable
@@ -297,6 +299,17 @@ private fun RecipeNotFoundScreen(
         OrangeButton(
             text = "Volver",
             onClick = onBackClick
+        )
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun RecipeDetailScreenPreview() {
+    RecetarioTheme {
+        RecipeDetailScreen(
+            recipeId = "public_tacos_asada",
+            onBackClick = {}
         )
     }
 }

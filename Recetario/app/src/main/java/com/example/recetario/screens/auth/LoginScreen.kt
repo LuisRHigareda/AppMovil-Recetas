@@ -22,11 +22,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
+import com.example.recetario.ui.theme.RecetarioTheme
 
 @Composable
 fun LoginScreen(
@@ -201,5 +203,17 @@ fun LoginScreen(
         )
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun LoginScreenPreview() {
+    RecetarioTheme {
+        LoginScreen(
+            onLoginClick = {},
+            onRegisterClick = {},
+            onRecoverPasswordClick = {}
+        )
     }
 }
