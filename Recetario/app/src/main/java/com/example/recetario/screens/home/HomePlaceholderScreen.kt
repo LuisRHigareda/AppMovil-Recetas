@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.AuthRepository
@@ -50,6 +51,7 @@ import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.profile.UserAvatar
 import com.example.recetario.screens.recipe.RecipeImagePreview
 import com.example.recetario.screens.recipe.RecipeTagRow
+import com.example.recetario.ui.theme.RecetarioTheme
 
 private enum class HomeSection(val title: String) {
     MY_RECIPES("Mis recetas"),
@@ -405,5 +407,17 @@ private fun EmptyRecipeState(
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun HomeScreenPreview() {
+    RecetarioTheme {
+        HomeScreen(
+            onProfileClick = {},
+            onRecipeClick = {},
+            onAddRecipeClick = {}
+        )
     }
 }

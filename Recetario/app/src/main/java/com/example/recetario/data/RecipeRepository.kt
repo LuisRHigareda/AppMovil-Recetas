@@ -4,6 +4,14 @@ import android.content.Context
 import com.example.recetario.model.Recipe
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+data class MonthlyFavoriteActivity(
+    val monthLabel: String,
+    val savedCount: Int
+)
 
 class RecipeRepository(context: Context) {
 
@@ -32,6 +40,10 @@ class RecipeRepository(context: Context) {
 
     fun getOwnPublicRecipes(): List<Recipe> {
         return getOwnRecipes().filter { it.isPublic && !it.isSecret }
+    }
+
+    fun getOwnSecretRecipes(): List<Recipe> {
+        return getOwnRecipes().filter { it.isSecret }
     }
 
     fun getExploreRecipes(): List<Recipe> {
@@ -94,6 +106,7 @@ class RecipeRepository(context: Context) {
             favorites.remove(recipeId)
         } else {
             favorites.add(recipeId)
+            registerFavoriteSave()
         }
 
         preferences.edit()
@@ -130,6 +143,37 @@ class RecipeRepository(context: Context) {
         }
     }
 
+    fun getPublicRecipeCount(): Int {
+        return getOwnRecipes().count { it.isPublic }
+    }
+
+    fun getPrivateRecipeCount(): Int {
+        return getOwnRecipes().count { !it.isPublic }
+    }
+
+    fun getFavoriteActivityLastSixMonths(): List<MonthlyFavoriteActivity> {
+        val formatter = DateTimeFormatter.ofPattern("MMM", Locale.getDefault())
+        val currentMonth = YearMonth.now()
+        val activityByMonth = getFavoriteActivityMap()
+
+        return (5 downTo 0).map { monthsBack ->
+            val yearMonth = currentMonth.minusMonths(monthsBack.toLong())
+            val label = yearMonth.format(formatter)
+                .replaceFirstChar { char ->
+                    if (char.isLowerCase()) {
+                        char.titlecase(Locale.getDefault())
+                    } else {
+                        char.toString()
+                    }
+                }
+
+            MonthlyFavoriteActivity(
+                monthLabel = label,
+                savedCount = activityByMonth.optInt(yearMonth.toString(), 0)
+            )
+        }
+    }
+
     private fun saveOwnRecipes(recipes: List<Recipe>) {
         val array = JSONArray()
 
@@ -140,6 +184,28 @@ class RecipeRepository(context: Context) {
         preferences.edit()
             .putString(KEY_OWN_RECIPES, array.toString())
             .apply()
+    }
+
+    private fun registerFavoriteSave() {
+        val activityByMonth = getFavoriteActivityMap()
+        val currentMonth = YearMonth.now().toString()
+        val currentCount = activityByMonth.optInt(currentMonth, 0)
+
+        activityByMonth.put(currentMonth, currentCount + 1)
+
+        preferences.edit()
+            .putString(KEY_FAVORITE_ACTIVITY, activityByMonth.toString())
+            .apply()
+    }
+
+    private fun getFavoriteActivityMap(): JSONObject {
+        val rawJson = preferences.getString(KEY_FAVORITE_ACTIVITY, "{}") ?: "{}"
+
+        return runCatching {
+            JSONObject(rawJson)
+        }.getOrElse {
+            JSONObject()
+        }
     }
 
     private fun recipeToJson(recipe: Recipe): JSONObject {
@@ -298,6 +364,7 @@ class RecipeRepository(context: Context) {
     companion object {
         private const val KEY_OWN_RECIPES = "own_recipes"
         private const val KEY_FAVORITES = "favorite_recipe_ids"
+        private const val KEY_FAVORITE_ACTIVITY = "favorite_activity"
         private const val KEY_RATING_PREFIX = "rating_"
     }
 }

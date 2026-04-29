@@ -5,10 +5,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -30,20 +31,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.recetario.data.AuthRepository
+import com.example.recetario.data.MonthlyFavoriteActivity
 import com.example.recetario.data.RecipeRepository
+import com.example.recetario.data.findFragmentActivity
+import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.AuthTextField
 import com.example.recetario.screens.auth.GenderDropdown
 import com.example.recetario.screens.auth.OrangeButton
+import com.example.recetario.screens.auth.RecetarioLightGray
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.recipe.RecipeImagePreview
+import com.example.recetario.ui.theme.RecetarioTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,7 +61,8 @@ import java.util.Locale
 fun ProfileScreen(
     onBackClick: () -> Unit,
     onLogoutClick: () -> Unit,
-    onEditRecipeClick: (String) -> Unit
+    onEditRecipeClick: (String) -> Unit,
+    onViewRecipeClick: (String) -> Unit
 ) {
     val context = LocalContext.current
     val authRepository = remember { AuthRepository(context) }
@@ -61,6 +71,8 @@ fun ProfileScreen(
     var refreshCounter by remember { mutableIntStateOf(0) }
     var isEditingProfile by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var isSecretFolderUnlocked by remember { mutableStateOf(false) }
+    var secretFolderMessage by remember { mutableStateOf<String?>(null) }
 
     var firstName by remember(refreshCounter) { mutableStateOf(authRepository.getFirstName()) }
     var lastName by remember(refreshCounter) { mutableStateOf(authRepository.getLastName()) }
@@ -72,11 +84,15 @@ fun ProfileScreen(
     var birthDateError by remember { mutableStateOf<String?>(null) }
     var genderError by remember { mutableStateOf<String?>(null) }
 
-    val publicRecipes = recipeRepository.getOwnPublicRecipes()
-    val fullName = authRepository.getFullName()
-    val email = authRepository.getEmail()
-    val profileImageUri = authRepository.getProfileImageUri()
-    val initials = authRepository.getInitials()
+    val publicRecipes = remember(refreshCounter) { recipeRepository.getOwnPublicRecipes() }
+    val secretRecipes = remember(refreshCounter) { recipeRepository.getOwnSecretRecipes() }
+    val favoriteActivity = remember(refreshCounter) { recipeRepository.getFavoriteActivityLastSixMonths() }
+    val publicRecipeCount = remember(refreshCounter) { recipeRepository.getPublicRecipeCount() }
+    val privateRecipeCount = remember(refreshCounter) { recipeRepository.getPrivateRecipeCount() }
+    val fullName = remember(refreshCounter) { authRepository.getFullName() }
+    val email = remember(refreshCounter) { authRepository.getEmail() }
+    val profileImageUri = remember(refreshCounter) { authRepository.getProfileImageUri() }
+    val initials = remember(refreshCounter) { authRepository.getInitials() }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -128,7 +144,6 @@ fun ProfileScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
             .background(Color.White)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
@@ -319,6 +334,30 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(30.dp))
 
         Text(
+            text = "Actividad",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ActivityChartCard(
+            title = "Recetas guardadas por mes",
+            entries = favoriteActivity,
+            emptyMessage = "Todavía no tienes recetas guardadas en favoritos."
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        VisibilityChartCard(
+            publicCount = publicRecipeCount,
+            privateCount = privateRecipeCount
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Text(
             text = "Mis recetas publicadas",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
@@ -337,6 +376,111 @@ fun ProfileScreen(
             publicRecipes.forEach { recipe ->
                 PublicRecipeCard(
                     recipe = recipe,
+                    onEditClick = {
+                        onEditRecipeClick(recipe.id)
+                    },
+                    onDeleteClick = {
+                        recipeRepository.deleteUserRecipe(recipe.id)
+                        refreshCounter++
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Text(
+            text = "Folder secreto",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Tus recetas secretas solo se muestran aquí y requieren huella digital para desbloquearse.",
+            color = Color.DarkGray,
+            fontSize = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (secretFolderMessage != null) {
+            Text(
+                text = secretFolderMessage ?: "",
+                color = if (isSecretFolderUnlocked) RecetarioOrange else Color.Red,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        if (secretRecipes.isEmpty()) {
+            Text(
+                text = "Todavía no has marcado recetas como secretas.",
+                color = Color.DarkGray,
+                fontSize = 15.sp
+            )
+        } else if (!isSecretFolderUnlocked) {
+            OutlinedButton(
+                onClick = {
+                    secretFolderMessage = null
+
+                    val activity = context.findFragmentActivity()
+
+                    if (activity == null) {
+                        secretFolderMessage = "No se pudo iniciar la autenticación con huella digital."
+                        return@OutlinedButton
+                    }
+
+                    showBiometricPrompt(
+                        activity = activity,
+                        title = "Folder secreto",
+                        subtitle = "Confirma tu huella para ver tus recetas secretas.",
+                        onSuccess = {
+                            isSecretFolderUnlocked = true
+                            secretFolderMessage = "Folder desbloqueado correctamente."
+                        },
+                        onError = { error ->
+                            secretFolderMessage = error
+                        },
+                        onFailed = {
+                            secretFolderMessage = "No se reconoció la huella digital. Intenta nuevamente."
+                        }
+                    )
+                }
+            ) {
+                Text(
+                    text = "Desbloquear con huella",
+                    color = RecetarioOrange,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        } else {
+            TextButton(
+                onClick = {
+                    isSecretFolderUnlocked = false
+                    secretFolderMessage = "Folder bloqueado."
+                }
+            ) {
+                Text(
+                    text = "Ocultar recetas secretas",
+                    color = Color.DarkGray,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            secretRecipes.forEach { recipe ->
+                SecretRecipeCard(
+                    recipe = recipe,
+                    onViewClick = {
+                        onViewRecipeClick(recipe.id)
+                    },
                     onEditClick = {
                         onEditRecipeClick(recipe.id)
                     },
@@ -381,6 +525,160 @@ private fun ProfileInfoRow(
             color = Color.Black,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun ActivityChartCard(
+    title: String,
+    entries: List<MonthlyFavoriteActivity>,
+    emptyMessage: String
+) {
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = 4.dp
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            val hasActivity = entries.any { it.savedCount > 0 }
+
+            if (!hasActivity) {
+                Text(
+                    text = emptyMessage,
+                    color = Color.DarkGray,
+                    fontSize = 14.sp
+                )
+            } else {
+                val maxValue = entries.maxOf { it.savedCount }.coerceAtLeast(1)
+
+                entries.forEach { entry ->
+                    ChartBarRow(
+                        label = entry.monthLabel,
+                        value = entry.savedCount,
+                        maxValue = maxValue,
+                        barColor = RecetarioOrange
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisibilityChartCard(
+    publicCount: Int,
+    privateCount: Int
+) {
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = 4.dp
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Recetas públicas vs privadas",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            val maxValue = maxOf(publicCount, privateCount).coerceAtLeast(1)
+
+            ChartBarRow(
+                label = "Públicas",
+                value = publicCount,
+                maxValue = maxValue,
+                barColor = RecetarioOrange
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            ChartBarRow(
+                label = "Privadas",
+                value = privateCount,
+                maxValue = maxValue,
+                barColor = Color(0xFF5C6BC0)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChartBarRow(
+    label: String,
+    value: Int,
+    maxValue: Int,
+    barColor: Color
+) {
+    val progress = if (maxValue == 0) {
+        0f
+    } else {
+        value.toFloat() / maxValue.toFloat()
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = label,
+            color = Color.Black,
+            fontSize = 14.sp,
+            modifier = Modifier.width(76.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(50))
+                .background(RecetarioLightGray)
+        ) {
+            if (value > 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(barColor)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = value.toString(),
+            color = Color.DarkGray,
+            fontSize = 14.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(20.dp)
         )
     }
 }
@@ -452,6 +750,82 @@ private fun PublicRecipeCard(
     }
 }
 
+@Composable
+private fun SecretRecipeCard(
+    recipe: Recipe,
+    onViewClick: () -> Unit,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = 4.dp
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            RecipeImagePreview(
+                imageUri = recipe.imageUri,
+                placeholderText = "Secreta",
+                modifier = Modifier.size(78.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = recipe.name,
+                    color = Color.Black,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Acceso protegido con huella",
+                    color = Color.DarkGray,
+                    fontSize = 13.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row {
+                    TextButton(onClick = onViewClick) {
+                        Text(
+                            text = "Ver",
+                            color = RecetarioOrange,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    TextButton(onClick = onEditClick) {
+                        Text(
+                            text = "Editar",
+                            color = RecetarioOrange,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    TextButton(onClick = onDeleteClick) {
+                        Text(
+                            text = "Eliminar",
+                            color = Color.Red,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun formatBirthDateInput(input: String): String {
     val digits = input.filter { it.isDigit() }.take(8)
 
@@ -477,5 +851,18 @@ private fun isValidBirthDate(date: String): Boolean {
         !parsedDate.after(Date())
     } catch (exception: Exception) {
         false
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun ProfileScreenPreview() {
+    RecetarioTheme {
+        ProfileScreen(
+            onBackClick = {},
+            onLogoutClick = {},
+            onEditRecipeClick = {},
+            onViewRecipeClick = {}
+        )
     }
 }
