@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "734885868513",
+    "project_id": "fir-recetas-e0d6c",
+    "storage_bucket": "fir-recetas-e0d6c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734885868513:android:989d23fb24a074291758a0",
+        "android_client_info": {
+          "package_name": "com.example.recetario"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOzKHiKMFLsvrForT57NYatDqWzw-ltb8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

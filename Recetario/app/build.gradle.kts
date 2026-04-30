@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.googleServices)
+    alias(libs.plugins.firebaseCrashlytics)
 }
 
 android {
@@ -49,6 +51,22 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
+
+    // --- FIREBASE ---
+    // Usamos el BoM directamente para que controle las versiones automáticamente
+    implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
+
+    // Cambiamos Crashlytics para que también lo controle el BoM (ya no usamos libs.)
+    implementation("com.google.firebase:firebase-crashlytics")
+
+    // Agregamos Auth y Firestore directamente (sin versión, el BoM decide)
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+
+    // Vital para que funcionen los .await() de Firebase en tus corrutinas
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    // -----------------
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

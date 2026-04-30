@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope // <- Nuevo import
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,8 @@ import com.example.recetario.ui.theme.RecetarioTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.recetario.model.User
+import kotlinx.coroutines.launch // <- Nuevo import
 
 @Composable
 fun RegisterScreen(
@@ -40,6 +43,9 @@ fun RegisterScreen(
 ) {
     val context = LocalContext.current
     val authRepository = remember { AuthRepository(context) }
+
+    // 1. Creamos el scope para poder lanzar funciones asíncronas de Firebase
+    val coroutineScope = rememberCoroutineScope()
 
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
@@ -56,6 +62,10 @@ fun RegisterScreen(
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
+
+    // 2. Estados de UI para Firebase (Carga y Errores de red)
+    var isLoading by remember { mutableStateOf(false) }
+    var generalErrorMessage by remember { mutableStateOf<String?>(null) }
 
     fun validateForm(): Boolean {
         firstNameError = null
@@ -205,11 +215,26 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // 3. Mostramos error si Firebase rechaza el registro (ej. correo ya en uso)
+        if (generalErrorMessage != null) {
+            Text(
+                text = generalErrorMessage!!,
+                color = Color.Red,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         OrangeButton(
-            text = "Registrarse",
+            // 4. Texto dinámico dependiendo del estado de carga
+            text = if (isLoading) "Registrando..." else "Registrarse",
             onClick = {
-                if (validateForm()) {
-                    authRepository.registerUser(
+                // Prevenimos que se ejecute si ya está cargando o si la forma es inválida
+                if (validateForm() && !isLoading) {
+                    isLoading = true
+                    generalErrorMessage = null
+
+                    val newUser = User(
                         firstName = firstName,
                         lastName = lastName,
                         birthDate = birthDate,
@@ -218,7 +243,19 @@ fun RegisterScreen(
                         password = password
                     )
 
-                    onRegisterClick()
+                    // 5. Lanzamos la corrutina para comunicarnos con el Repositorio
+                    coroutineScope.launch {
+                        val result = authRepository.registerUser(newUser)
+
+                        isLoading = false // Ya terminó (sea éxito o falla)
+
+                        if (result.isSuccess) {
+                            onRegisterClick() // Avanza a la siguiente pantalla
+                        } else {
+                            // Extrae el mensaje de error de Firebase
+                            generalErrorMessage = result.exceptionOrNull()?.localizedMessage ?: "Ocurrió un error inesperado."
+                        }
+                    }
                 }
             },
             modifier = Modifier.widthIn(max = 340.dp)

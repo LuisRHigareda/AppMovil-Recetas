@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.model.Recipe
+import com.example.recetario.model.User
 import com.example.recetario.screens.auth.AuthTextField
 import com.example.recetario.screens.auth.GenderDropdown
 import com.example.recetario.screens.auth.OrangeButton
@@ -53,6 +55,7 @@ import com.example.recetario.screens.auth.RecetarioLightGray
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.recipe.RecipeImagePreview
 import com.example.recetario.ui.theme.RecetarioTheme
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,11 +71,14 @@ fun ProfileScreen(
     val authRepository = remember { AuthRepository(context) }
     val recipeRepository = remember { RecipeRepository(context) }
 
+    val coroutineScope = rememberCoroutineScope()
+
     var refreshCounter by remember { mutableIntStateOf(0) }
     var isEditingProfile by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var isSecretFolderUnlocked by remember { mutableStateOf(false) }
     var secretFolderMessage by remember { mutableStateOf<String?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
 
     var firstName by remember(refreshCounter) { mutableStateOf(authRepository.getFirstName()) }
     var lastName by remember(refreshCounter) { mutableStateOf(authRepository.getLastName()) }
@@ -278,19 +284,34 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(18.dp))
 
             OrangeButton(
-                text = "Guardar cambios",
+                text = if (isSaving) "Guardando..." else "Guardar cambios",
                 onClick = {
-                    if (validateProfile()) {
-                        authRepository.updateUserProfile(
+                    if (validateProfile() && !isSaving) {
+                        isSaving = true
+                        message = null
+
+                        val updatedUser = User(
+                            id = authRepository.getUserId(),
                             firstName = firstName,
                             lastName = lastName,
                             birthDate = birthDate,
-                            gender = gender
+                            gender = gender,
+                            email = email,
+                            password = ""
                         )
 
-                        isEditingProfile = false
-                        message = "Información actualizada correctamente."
-                        refreshCounter++
+                        coroutineScope.launch {
+                            val result = authRepository.updateUserProfile(updatedUser)
+                            isSaving = false
+
+                            if (result.isSuccess) {
+                                isEditingProfile = false
+                                message = "Información actualizada correctamente."
+                                refreshCounter++
+                            } else {
+                                message = result.exceptionOrNull()?.localizedMessage ?: "Error al actualizar."
+                            }
+                        }
                     }
                 },
                 modifier = Modifier.widthIn(max = 340.dp)

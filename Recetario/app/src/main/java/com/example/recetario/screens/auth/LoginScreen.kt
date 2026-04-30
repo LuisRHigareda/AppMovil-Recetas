@@ -29,6 +29,8 @@ import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.ui.theme.RecetarioTheme
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
@@ -38,12 +40,15 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
     val authRepository = remember { AuthRepository(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
+
+    var isLoading by remember { mutableStateOf(false) }
     var generalMessage by remember { mutableStateOf<String?>(null) }
 
     fun validateLogin(): Boolean {
