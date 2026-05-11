@@ -11,6 +11,7 @@ data class Recipe(
     val imageUri: String? = null,
     val referenceUrl: String? = null,
     val authorName: String,
+    val ownerEmail: String = "",
     val isOwnRecipe: Boolean,
     val isPublic: Boolean,
     val isSecret: Boolean,

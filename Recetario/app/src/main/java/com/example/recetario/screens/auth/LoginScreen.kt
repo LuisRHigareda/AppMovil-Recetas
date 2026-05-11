@@ -129,7 +129,7 @@ fun LoginScreen(
             onClick = {
                 generalMessage = null
 
-                if (!userState.hasRegisteredUser) {
+                if (!userState.hasAnyRegisteredUser) {
                     generalMessage = "Primero debes crear una cuenta."
                     return@TextButton
                 }
@@ -185,7 +185,7 @@ fun LoginScreen(
             text = "Iniciar Sesión",
             onClick = {
                 if (validateLogin()) {
-                    if (!userState.hasRegisteredUser) {
+                    if (!userState.hasAnyRegisteredUser) {
                         generalMessage = "Primero debes crear una cuenta."
                     } else {
                         authViewModel.login(email, password) { isValid ->

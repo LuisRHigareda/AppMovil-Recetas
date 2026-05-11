@@ -3,12 +3,17 @@ package com.example.recetario.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.MonthlyFavoriteActivity
 import com.example.recetario.data.RecipeRepository
 import com.example.recetario.model.Recipe
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -30,37 +35,55 @@ data class RecipeUiState(
         get() = ownRecipes + exploreRecipes.filter { recipe -> ownRecipes.none { it.id == recipe.id } }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RecipeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = RecipeRepository(application)
+    private val authRepository = AuthRepository(application)
     private val defaultPublicRecipes = repository.getDefaultPublicRecipes()
 
-    val uiState: StateFlow<RecipeUiState> = combine(
-        repository.observeOwnRecipes(),
-        repository.observeFavorites(),
-        repository.observeRatings()
-    ) { ownRecipes, favorites, ratings ->
-        val visibleOwnRecipes = ownRecipes.filter { !it.isSecret }
-        val publicRecipes = ownRecipes.filter { it.isPublic && !it.isSecret }
-        val secretRecipes = ownRecipes.filter { it.isSecret }
-        val exploreRecipes = defaultPublicRecipes + publicRecipes
-        val favoriteIds = favorites.map { it.recipeId }.toSet()
-        val favoriteRecipes = exploreRecipes.filter { it.id in favoriteIds }
-        val ratingsByRecipeId = ratings.associate { it.recipeId to it.rating }
+    val uiState: StateFlow<RecipeUiState> = authRepository.userPreferencesFlow.flatMapLatest { userState ->
+        val currentUserEmail = userState.email
 
-        RecipeUiState(
-            ownRecipes = ownRecipes,
-            visibleOwnRecipes = visibleOwnRecipes,
-            exploreRecipes = exploreRecipes,
-            favoriteRecipes = favoriteRecipes,
-            publicRecipes = publicRecipes,
-            secretRecipes = secretRecipes,
-            favoriteRecipeIds = favoriteIds,
-            ratingsByRecipeId = ratingsByRecipeId,
-            favoriteActivity = repository.getFavoriteActivityLastSixMonths(favorites),
-            publicRecipeCount = ownRecipes.count { it.isPublic },
-            privateRecipeCount = ownRecipes.count { !it.isPublic }
-        )
+        if (currentUserEmail.isBlank()) {
+            flowOf(RecipeUiState(exploreRecipes = defaultPublicRecipes))
+        } else {
+            combine(
+                repository.observeOwnRecipes(currentUserEmail),
+                repository.observePublicUserRecipes(),
+                repository.observeFavorites(currentUserEmail),
+                repository.observeRatings(currentUserEmail)
+            ) { ownRecipes, publicUserRecipes, favorites, ratings ->
+                val visibleOwnRecipes = ownRecipes.filter { !it.isSecret }
+                val publicRecipes = ownRecipes.filter { it.isPublic && !it.isSecret }
+                val secretRecipes = ownRecipes.filter { it.isSecret }
+                val publicRecipesFromUsers = publicUserRecipes.map { recipe ->
+                    if (recipe.ownerEmail == currentUserEmail) {
+                        recipe.copy(isOwnRecipe = true)
+                    } else {
+                        recipe.copy(isOwnRecipe = false)
+                    }
+                }
+                val exploreRecipes = defaultPublicRecipes + publicRecipesFromUsers
+                val favoriteIds = favorites.map { it.recipeId }.toSet()
+                val favoriteRecipes = exploreRecipes.filter { it.id in favoriteIds }
+                val ratingsByRecipeId = ratings.associate { it.recipeId to it.rating }
+
+                RecipeUiState(
+                    ownRecipes = ownRecipes,
+                    visibleOwnRecipes = visibleOwnRecipes,
+                    exploreRecipes = exploreRecipes,
+                    favoriteRecipes = favoriteRecipes,
+                    publicRecipes = publicRecipes,
+                    secretRecipes = secretRecipes,
+                    favoriteRecipeIds = favoriteIds,
+                    ratingsByRecipeId = ratingsByRecipeId,
+                    favoriteActivity = repository.getFavoriteActivityLastSixMonths(favorites),
+                    publicRecipeCount = ownRecipes.count { it.isPublic && !it.isSecret },
+                    privateRecipeCount = ownRecipes.count { !it.isPublic || it.isSecret }
+                )
+            }
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -100,26 +123,42 @@ class RecipeViewModel(application: Application) : AndroidViewModel(application) 
 
     fun saveRecipe(recipe: Recipe, onSaved: () -> Unit) {
         viewModelScope.launch {
-            repository.saveUserRecipe(recipe)
-            onSaved()
+            val currentUserEmail = authRepository.userPreferencesFlow.first().email
+
+            if (currentUserEmail.isNotBlank()) {
+                repository.saveUserRecipe(currentUserEmail, recipe.copy(ownerEmail = currentUserEmail))
+                onSaved()
+            }
         }
     }
 
     fun deleteRecipe(recipeId: String) {
         viewModelScope.launch {
-            repository.deleteUserRecipe(recipeId)
+            val currentUserEmail = authRepository.userPreferencesFlow.first().email
+
+            if (currentUserEmail.isNotBlank()) {
+                repository.deleteUserRecipe(currentUserEmail, recipeId)
+            }
         }
     }
 
     fun toggleFavorite(recipeId: String) {
         viewModelScope.launch {
-            repository.toggleFavorite(recipeId)
+            val currentUserEmail = authRepository.userPreferencesFlow.first().email
+
+            if (currentUserEmail.isNotBlank()) {
+                repository.toggleFavorite(currentUserEmail, recipeId)
+            }
         }
     }
 
     fun rateRecipe(recipeId: String, rating: Int) {
         viewModelScope.launch {
-            repository.rateRecipe(recipeId, rating)
+            val currentUserEmail = authRepository.userPreferencesFlow.first().email
+
+            if (currentUserEmail.isNotBlank()) {
+                repository.rateRecipe(currentUserEmail, recipeId, rating)
+            }
         }
     }
 }

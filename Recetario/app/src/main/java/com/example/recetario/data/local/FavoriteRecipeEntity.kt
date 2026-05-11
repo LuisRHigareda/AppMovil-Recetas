@@ -1,10 +1,13 @@
 package com.example.recetario.data.local
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
-@Entity(tableName = "favorite_recipes")
+@Entity(
+    tableName = "favorite_recipes",
+    primaryKeys = ["ownerEmail", "recipeId"]
+)
 data class FavoriteRecipeEntity(
-    @PrimaryKey val recipeId: String,
+    val ownerEmail: String,
+    val recipeId: String,
     val savedYearMonth: String
 )

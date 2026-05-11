@@ -7,6 +7,7 @@ import com.example.recetario.model.Recipe
 @Entity(tableName = "own_recipes")
 data class RecipeEntity(
     @PrimaryKey val id: String,
+    val ownerEmail: String,
     val name: String,
     val description: String,
     val category: String,
@@ -35,6 +36,7 @@ fun RecipeEntity.toDomain(): Recipe {
         imageUri = imageUri,
         referenceUrl = referenceUrl,
         authorName = authorName,
+        ownerEmail = ownerEmail,
         isOwnRecipe = isOwnRecipe,
         isPublic = isPublic,
         isSecret = isSecret,
@@ -43,9 +45,10 @@ fun RecipeEntity.toDomain(): Recipe {
     )
 }
 
-fun Recipe.toEntity(): RecipeEntity {
+fun Recipe.toEntity(ownerEmailOverride: String = ownerEmail): RecipeEntity {
     return RecipeEntity(
         id = id,
+        ownerEmail = ownerEmailOverride,
         name = name,
         description = description,
         category = category,

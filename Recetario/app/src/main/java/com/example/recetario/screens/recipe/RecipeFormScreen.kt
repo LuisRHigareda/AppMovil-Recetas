@@ -475,6 +475,7 @@ fun RecipeFormScreen(
                         imageUri = imageUri,
                         referenceUrl = referenceUrl.trim().ifBlank { null },
                         authorName = userState.fullName,
+                        ownerEmail = userState.email,
                         isOwnRecipe = true,
                         isPublic = shareRecipe,
                         isSecret = secretRecipe,

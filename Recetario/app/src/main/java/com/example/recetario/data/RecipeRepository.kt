@@ -22,42 +22,56 @@ class RecipeRepository(context: Context) {
 
     private val recipeDao = AppDatabase.getInstance(context).recipeDao()
 
-    fun observeOwnRecipes(): Flow<List<Recipe>> {
-        return recipeDao.observeOwnRecipes().map { recipes ->
+    fun observeOwnRecipes(ownerEmail: String): Flow<List<Recipe>> {
+        return recipeDao.observeOwnRecipes(ownerEmail.normalizeEmail()).map { recipes ->
             recipes.map { it.toDomain() }
         }
     }
 
-    fun observeFavorites(): Flow<List<FavoriteRecipeEntity>> {
-        return recipeDao.observeFavorites()
+    fun observePublicUserRecipes(): Flow<List<Recipe>> {
+        return recipeDao.observePublicUserRecipes().map { recipes ->
+            recipes.map { it.toDomain() }
+        }
     }
 
-    fun observeRatings(): Flow<List<RecipeRatingEntity>> {
-        return recipeDao.observeRatings()
+    fun observeFavorites(ownerEmail: String): Flow<List<FavoriteRecipeEntity>> {
+        return recipeDao.observeFavorites(ownerEmail.normalizeEmail())
     }
 
-    suspend fun findOwnRecipeById(recipeId: String): Recipe? {
-        return recipeDao.getOwnRecipeById(recipeId)?.toDomain()
+    fun observeRatings(ownerEmail: String): Flow<List<RecipeRatingEntity>> {
+        return recipeDao.observeRatings(ownerEmail.normalizeEmail())
     }
 
-    suspend fun saveUserRecipe(recipe: Recipe) {
-        recipeDao.upsertRecipe(recipe.toEntity())
+    suspend fun findOwnRecipeById(ownerEmail: String, recipeId: String): Recipe? {
+        return recipeDao.getOwnRecipeById(ownerEmail.normalizeEmail(), recipeId)?.toDomain()
     }
 
-    suspend fun deleteUserRecipe(recipeId: String) {
-        recipeDao.deleteRecipe(recipeId)
-        recipeDao.deleteFavorite(recipeId)
-        recipeDao.deleteRating(recipeId)
+    suspend fun saveUserRecipe(ownerEmail: String, recipe: Recipe) {
+        val normalizedOwnerEmail = ownerEmail.normalizeEmail()
+        recipeDao.upsertRecipe(
+            recipe
+                .copy(ownerEmail = normalizedOwnerEmail, isOwnRecipe = true)
+                .toEntity(ownerEmailOverride = normalizedOwnerEmail)
+        )
     }
 
-    suspend fun toggleFavorite(recipeId: String) {
-        val isFavorite = recipeDao.countFavorite(recipeId) > 0
+    suspend fun deleteUserRecipe(ownerEmail: String, recipeId: String) {
+        val normalizedOwnerEmail = ownerEmail.normalizeEmail()
+        recipeDao.deleteRecipe(normalizedOwnerEmail, recipeId)
+        recipeDao.deleteFavoriteForAllUsers(recipeId)
+        recipeDao.deleteRatingForAllUsers(recipeId)
+    }
+
+    suspend fun toggleFavorite(ownerEmail: String, recipeId: String) {
+        val normalizedOwnerEmail = ownerEmail.normalizeEmail()
+        val isFavorite = recipeDao.countFavorite(normalizedOwnerEmail, recipeId) > 0
 
         if (isFavorite) {
-            recipeDao.deleteFavorite(recipeId)
+            recipeDao.deleteFavorite(normalizedOwnerEmail, recipeId)
         } else {
             recipeDao.insertFavorite(
                 FavoriteRecipeEntity(
+                    ownerEmail = normalizedOwnerEmail,
                     recipeId = recipeId,
                     savedYearMonth = YearMonth.now().toString()
                 )
@@ -65,10 +79,13 @@ class RecipeRepository(context: Context) {
         }
     }
 
-    suspend fun rateRecipe(recipeId: String, rating: Int) {
+    suspend fun rateRecipe(ownerEmail: String, recipeId: String, rating: Int) {
+        val normalizedOwnerEmail = ownerEmail.normalizeEmail()
+
         if (rating in 1..5) {
             recipeDao.upsertRating(
                 RecipeRatingEntity(
+                    ownerEmail = normalizedOwnerEmail,
                     recipeId = recipeId,
                     rating = rating
                 )
@@ -127,6 +144,7 @@ class RecipeRepository(context: Context) {
                 imageUri = "drawable:tacos_asada",
                 referenceUrl = "https://www.google.com/search?q=receta+tacos+de+asada",
                 authorName = "Usuario252",
+                ownerEmail = "default_public",
                 isOwnRecipe = false,
                 isPublic = true,
                 isSecret = false,
@@ -157,6 +175,7 @@ class RecipeRepository(context: Context) {
                 imageUri = "drawable:pastel_limon",
                 referenceUrl = "https://www.google.com/search?q=receta+pastel+de+limon",
                 authorName = "CocinaCasera",
+                ownerEmail = "default_public",
                 isOwnRecipe = false,
                 isPublic = true,
                 isSecret = false,
@@ -187,6 +206,7 @@ class RecipeRepository(context: Context) {
                 imageUri = "drawable:galletas_chocolate",
                 referenceUrl = "https://www.google.com/search?q=receta+galletas+con+chispas+de+chocolate",
                 authorName = "ReposteríaFácil",
+                ownerEmail = "default_public",
                 isOwnRecipe = false,
                 isPublic = true,
                 isSecret = false,
@@ -195,4 +215,6 @@ class RecipeRepository(context: Context) {
             )
         )
     }
+
+    private fun String.normalizeEmail(): String = trim().lowercase(Locale.getDefault())
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -23,10 +24,14 @@ data class UserPreferences(
     val biometricEnabled: Boolean = false,
     val sessionActive: Boolean = false,
     val profileImageUri: String? = null,
+    val registeredEmails: Set<String> = emptySet(),
     val isLoaded: Boolean = true
 ) {
     val hasRegisteredUser: Boolean
         get() = email.isNotBlank() && passwordHash.isNotBlank()
+
+    val hasAnyRegisteredUser: Boolean
+        get() = registeredEmails.isNotEmpty()
 
     val fullName: String
         get() = "$firstName $lastName".trim().ifEmpty { "Usuario" }
@@ -46,17 +51,28 @@ class AuthRepository(context: Context) {
     private val dataStore = context.applicationContext.authDataStore
 
     val userPreferencesFlow: Flow<UserPreferences> = dataStore.data.map { preferences ->
-        UserPreferences(
-            firstName = preferences[KEY_FIRST_NAME].orEmpty(),
-            lastName = preferences[KEY_LAST_NAME].orEmpty(),
-            birthDate = preferences[KEY_BIRTH_DATE].orEmpty(),
-            gender = preferences[KEY_GENDER].orEmpty(),
-            email = preferences[KEY_EMAIL].orEmpty(),
-            passwordHash = preferences[KEY_PASSWORD_HASH].orEmpty(),
-            biometricEnabled = preferences[KEY_BIOMETRIC_ENABLED] ?: false,
-            sessionActive = preferences[KEY_SESSION_ACTIVE] ?: false,
-            profileImageUri = preferences[KEY_PROFILE_IMAGE_URI]?.ifBlank { null }
-        )
+        val registeredEmails = preferences[KEY_REGISTERED_EMAILS].orEmpty()
+        val currentEmail = preferences[KEY_CURRENT_EMAIL].orEmpty().normalizeEmail()
+
+        if (currentEmail.isBlank()) {
+            UserPreferences(
+                registeredEmails = registeredEmails,
+                sessionActive = preferences[KEY_SESSION_ACTIVE] ?: false
+            )
+        } else {
+            UserPreferences(
+                firstName = preferences[firstNameKey(currentEmail)].orEmpty(),
+                lastName = preferences[lastNameKey(currentEmail)].orEmpty(),
+                birthDate = preferences[birthDateKey(currentEmail)].orEmpty(),
+                gender = preferences[genderKey(currentEmail)].orEmpty(),
+                email = currentEmail,
+                passwordHash = preferences[passwordHashKey(currentEmail)].orEmpty(),
+                biometricEnabled = preferences[biometricEnabledKey(currentEmail)] ?: false,
+                sessionActive = preferences[KEY_SESSION_ACTIVE] ?: false,
+                profileImageUri = preferences[profileImageUriKey(currentEmail)]?.ifBlank { null },
+                registeredEmails = registeredEmails
+            )
+        }
     }
 
     suspend fun registerUser(
@@ -67,25 +83,35 @@ class AuthRepository(context: Context) {
         email: String,
         password: String
     ) {
+        val normalizedEmail = email.normalizeEmail()
+
         dataStore.edit { preferences ->
-            preferences[KEY_FIRST_NAME] = firstName.trim()
-            preferences[KEY_LAST_NAME] = lastName.trim()
-            preferences[KEY_BIRTH_DATE] = birthDate.trim()
-            preferences[KEY_GENDER] = gender.trim()
-            preferences[KEY_EMAIL] = email.trim().lowercase()
-            preferences[KEY_PASSWORD_HASH] = hashPassword(password)
-            preferences[KEY_BIOMETRIC_ENABLED] = false
+            val registeredEmails = preferences[KEY_REGISTERED_EMAILS].orEmpty().toMutableSet()
+            registeredEmails.add(normalizedEmail)
+
+            preferences[KEY_REGISTERED_EMAILS] = registeredEmails
+            preferences[KEY_CURRENT_EMAIL] = normalizedEmail
+            preferences[firstNameKey(normalizedEmail)] = firstName.trim()
+            preferences[lastNameKey(normalizedEmail)] = lastName.trim()
+            preferences[birthDateKey(normalizedEmail)] = birthDate.trim()
+            preferences[genderKey(normalizedEmail)] = gender.trim()
+            preferences[passwordHashKey(normalizedEmail)] = hashPassword(password)
+            preferences[biometricEnabledKey(normalizedEmail)] = false
             preferences[KEY_SESSION_ACTIVE] = true
         }
     }
 
     suspend fun login(email: String, password: String): Boolean {
-        val currentUser = userPreferencesFlow.first()
-        val isValid = currentUser.email == email.trim().lowercase() &&
-                currentUser.passwordHash == hashPassword(password)
+        val normalizedEmail = email.normalizeEmail()
+        val preferences = dataStore.data.first()
+        val savedPasswordHash = preferences[passwordHashKey(normalizedEmail)].orEmpty()
+        val isValid = savedPasswordHash.isNotBlank() && savedPasswordHash == hashPassword(password)
 
         if (isValid) {
-            setSessionActive(true)
+            dataStore.edit { editablePreferences ->
+                editablePreferences[KEY_CURRENT_EMAIL] = normalizedEmail
+                editablePreferences[KEY_SESSION_ACTIVE] = true
+            }
         }
 
         return isValid
@@ -93,7 +119,8 @@ class AuthRepository(context: Context) {
 
     suspend fun loginWithSavedUser(password: String): Boolean {
         val currentUser = userPreferencesFlow.first()
-        val isValid = currentUser.passwordHash == hashPassword(password)
+        val isValid = currentUser.email.isNotBlank() &&
+                currentUser.passwordHash == hashPassword(password)
 
         if (isValid) {
             setSessionActive(true)
@@ -108,23 +135,35 @@ class AuthRepository(context: Context) {
         birthDate: String,
         gender: String
     ) {
+        val currentEmail = userPreferencesFlow.first().email
+
+        if (currentEmail.isBlank()) return
+
         dataStore.edit { preferences ->
-            preferences[KEY_FIRST_NAME] = firstName.trim()
-            preferences[KEY_LAST_NAME] = lastName.trim()
-            preferences[KEY_BIRTH_DATE] = birthDate.trim()
-            preferences[KEY_GENDER] = gender.trim()
+            preferences[firstNameKey(currentEmail)] = firstName.trim()
+            preferences[lastNameKey(currentEmail)] = lastName.trim()
+            preferences[birthDateKey(currentEmail)] = birthDate.trim()
+            preferences[genderKey(currentEmail)] = gender.trim()
         }
     }
 
     suspend fun setProfileImageUri(uri: String?) {
+        val currentEmail = userPreferencesFlow.first().email
+
+        if (currentEmail.isBlank()) return
+
         dataStore.edit { preferences ->
-            preferences[KEY_PROFILE_IMAGE_URI] = uri.orEmpty()
+            preferences[profileImageUriKey(currentEmail)] = uri.orEmpty()
         }
     }
 
     suspend fun setBiometricEnabled(enabled: Boolean) {
+        val currentEmail = userPreferencesFlow.first().email
+
+        if (currentEmail.isBlank()) return
+
         dataStore.edit { preferences ->
-            preferences[KEY_BIOMETRIC_ENABLED] = enabled
+            preferences[biometricEnabledKey(currentEmail)] = enabled
         }
     }
 
@@ -146,14 +185,25 @@ class AuthRepository(context: Context) {
     }
 
     companion object {
-        private val KEY_FIRST_NAME = stringPreferencesKey("first_name")
-        private val KEY_LAST_NAME = stringPreferencesKey("last_name")
-        private val KEY_BIRTH_DATE = stringPreferencesKey("birth_date")
-        private val KEY_GENDER = stringPreferencesKey("gender")
-        private val KEY_EMAIL = stringPreferencesKey("email")
-        private val KEY_PASSWORD_HASH = stringPreferencesKey("password_hash")
-        private val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        private val KEY_REGISTERED_EMAILS = stringSetPreferencesKey("registered_emails")
+        private val KEY_CURRENT_EMAIL = stringPreferencesKey("current_email")
         private val KEY_SESSION_ACTIVE = booleanPreferencesKey("session_active")
-        private val KEY_PROFILE_IMAGE_URI = stringPreferencesKey("profile_image_uri")
+
+        private fun String.normalizeEmail(): String = trim().lowercase(Locale.getDefault())
+
+        private fun userKey(email: String): String {
+            val bytes = MessageDigest.getInstance("SHA-256")
+                .digest(email.normalizeEmail().toByteArray())
+
+            return bytes.joinToString("") { "%02x".format(it) }.take(32)
+        }
+
+        private fun firstNameKey(email: String) = stringPreferencesKey("user_${userKey(email)}_first_name")
+        private fun lastNameKey(email: String) = stringPreferencesKey("user_${userKey(email)}_last_name")
+        private fun birthDateKey(email: String) = stringPreferencesKey("user_${userKey(email)}_birth_date")
+        private fun genderKey(email: String) = stringPreferencesKey("user_${userKey(email)}_gender")
+        private fun passwordHashKey(email: String) = stringPreferencesKey("user_${userKey(email)}_password_hash")
+        private fun biometricEnabledKey(email: String) = booleanPreferencesKey("user_${userKey(email)}_biometric_enabled")
+        private fun profileImageUriKey(email: String) = stringPreferencesKey("user_${userKey(email)}_profile_image_uri")
     }
 }
