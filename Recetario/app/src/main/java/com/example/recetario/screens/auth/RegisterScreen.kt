@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.recetario.data.RegisterUserResult
 import com.example.recetario.ui.theme.RecetarioTheme
 import com.example.recetario.viewmodel.AuthViewModel
 import java.text.SimpleDateFormat
@@ -213,9 +214,15 @@ fun RegisterScreen(
                         birthDate = birthDate,
                         gender = gender,
                         email = email,
-                        password = password,
-                        onSuccess = onRegisterClick
-                    )
+                        password = password
+                    ) { result ->
+                        when (result) {
+                            RegisterUserResult.Success -> onRegisterClick()
+                            RegisterUserResult.EmailAlreadyExists -> {
+                                emailError = "Este correo ya está registrado. Inicia sesión o usa otro correo."
+                            }
+                        }
+                    }
                 }
             },
             modifier = Modifier.widthIn(max = 340.dp)

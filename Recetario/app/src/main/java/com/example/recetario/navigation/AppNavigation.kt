@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -46,6 +47,15 @@ fun AppNavigation() {
         Routes.Login.route
     }
 
+    fun navigateToHomeClearingAuthStack() {
+        navController.navigate(Routes.Home.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -54,10 +64,11 @@ fun AppNavigation() {
             LoginScreen(
                 authViewModel = authViewModel,
                 onLoginClick = {
-                    navController.navigate(Routes.Home.route) {
-                        popUpTo(Routes.Login.route) {
-                            inclusive = true
-                        }
+                    navigateToHomeClearingAuthStack()
+                },
+                onBiometricSetupRequired = {
+                    navController.navigate(Routes.BiometricSetup.route) {
+                        launchSingleTop = true
                     }
                 },
                 onRegisterClick = {
@@ -73,10 +84,11 @@ fun AppNavigation() {
             ReturningLoginScreen(
                 authViewModel = authViewModel,
                 onLoginClick = {
-                    navController.navigate(Routes.Home.route) {
-                        popUpTo(Routes.ReturningLogin.route) {
-                            inclusive = true
-                        }
+                    navigateToHomeClearingAuthStack()
+                },
+                onBiometricSetupRequired = {
+                    navController.navigate(Routes.BiometricSetup.route) {
+                        launchSingleTop = true
                     }
                 },
                 onDifferentUserClick = {
@@ -121,18 +133,10 @@ fun AppNavigation() {
             BiometricSetupScreen(
                 authViewModel = authViewModel,
                 onAcceptClick = {
-                    navController.navigate(Routes.Home.route) {
-                        popUpTo(Routes.Login.route) {
-                            inclusive = true
-                        }
-                    }
+                    navigateToHomeClearingAuthStack()
                 },
                 onSkipClick = {
-                    navController.navigate(Routes.Home.route) {
-                        popUpTo(Routes.Login.route) {
-                            inclusive = true
-                        }
-                    }
+                    navigateToHomeClearingAuthStack()
                 }
             )
         }

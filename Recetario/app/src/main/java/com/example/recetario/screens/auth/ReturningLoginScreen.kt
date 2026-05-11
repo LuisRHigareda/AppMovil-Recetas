@@ -36,6 +36,7 @@ import com.example.recetario.viewmodel.AuthViewModel
 fun ReturningLoginScreen(
     authViewModel: AuthViewModel = viewModel(),
     onLoginClick: () -> Unit,
+    onBiometricSetupRequired: () -> Unit,
     onDifferentUserClick: () -> Unit,
     onRecoverPasswordClick: () -> Unit
 ) {
@@ -167,11 +168,13 @@ fun ReturningLoginScreen(
                     return@OrangeButton
                 }
 
-                authViewModel.loginWithSavedUser(password) { isValid ->
-                    if (isValid) {
-                        onLoginClick()
-                    } else {
+                authViewModel.loginWithSavedUser(password) { result ->
+                    if (!result.isValid) {
                         generalMessage = "Contraseña incorrecta."
+                    } else if (result.requiresBiometricSetup) {
+                        onBiometricSetupRequired()
+                    } else {
+                        onLoginClick()
                     }
                 }
             },
@@ -186,6 +189,7 @@ private fun ReturningLoginScreenPreview() {
     RecetarioTheme {
         ReturningLoginScreen(
             onLoginClick = {},
+            onBiometricSetupRequired = {},
             onDifferentUserClick = {},
             onRecoverPasswordClick = {}
         )

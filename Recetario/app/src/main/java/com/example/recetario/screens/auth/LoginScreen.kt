@@ -36,6 +36,7 @@ import com.example.recetario.viewmodel.AuthViewModel
 fun LoginScreen(
     authViewModel: AuthViewModel = viewModel(),
     onLoginClick: () -> Unit,
+    onBiometricSetupRequired: () -> Unit,
     onRegisterClick: () -> Unit,
     onRecoverPasswordClick: () -> Unit
 ) {
@@ -188,11 +189,13 @@ fun LoginScreen(
                     if (!userState.hasAnyRegisteredUser) {
                         generalMessage = "Primero debes crear una cuenta."
                     } else {
-                        authViewModel.login(email, password) { isValid ->
-                            if (isValid) {
-                                onLoginClick()
-                            } else {
+                        authViewModel.login(email, password) { result ->
+                            if (!result.isValid) {
                                 generalMessage = "Correo o contraseña incorrectos."
+                            } else if (result.requiresBiometricSetup) {
+                                onBiometricSetupRequired()
+                            } else {
+                                onLoginClick()
                             }
                         }
                     }
@@ -219,6 +222,7 @@ private fun LoginScreenPreview() {
     RecetarioTheme {
         LoginScreen(
             onLoginClick = {},
+            onBiometricSetupRequired = {},
             onRegisterClick = {},
             onRecoverPasswordClick = {}
         )

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.recetario.data.AuthRepository
+import com.example.recetario.data.LoginResult
+import com.example.recetario.data.RegisterUserResult
 import com.example.recetario.data.UserPreferences
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +29,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         gender: String,
         email: String,
         password: String,
-        onSuccess: () -> Unit
+        onResult: (RegisterUserResult) -> Unit
     ) {
         viewModelScope.launch {
-            repository.registerUser(
+            val result = repository.registerUser(
                 firstName = firstName,
                 lastName = lastName,
                 birthDate = birthDate,
@@ -38,14 +40,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 email = email,
                 password = password
             )
-            onSuccess()
+            onResult(result)
         }
     }
 
     fun login(
         email: String,
         password: String,
-        onResult: (Boolean) -> Unit
+        onResult: (LoginResult) -> Unit
     ) {
         viewModelScope.launch {
             onResult(repository.login(email, password))
@@ -54,7 +56,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loginWithSavedUser(
         password: String,
-        onResult: (Boolean) -> Unit
+        onResult: (LoginResult) -> Unit
     ) {
         viewModelScope.launch {
             onResult(repository.loginWithSavedUser(password))
