@@ -1,14 +1,19 @@
 package com.example.recetario.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.recetario.data.AuthRepository
 import com.example.recetario.screens.auth.BiometricSetupScreen
 import com.example.recetario.screens.auth.LoginScreen
 import com.example.recetario.screens.auth.RecoverPasswordScreen
@@ -18,19 +23,27 @@ import com.example.recetario.screens.home.HomeScreen
 import com.example.recetario.screens.profile.ProfileScreen
 import com.example.recetario.screens.recipe.RecipeDetailScreen
 import com.example.recetario.screens.recipe.RecipeFormScreen
+import com.example.recetario.viewmodel.AuthViewModel
 
 @Composable
 fun AppNavigation() {
-    val context = LocalContext.current
-    val authRepository = remember { AuthRepository(context) }
     val navController = rememberNavController()
+    val authViewModel: AuthViewModel = viewModel()
+    val userState by authViewModel.userState.collectAsState()
 
-    val startDestination = remember {
-        if (authRepository.isSessionActive()) {
-            Routes.ReturningLogin.route
-        } else {
-            Routes.Login.route
-        }
+    if (!userState.isLoaded) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+        )
+        return
+    }
+
+    val startDestination = if (userState.sessionActive) {
+        Routes.ReturningLogin.route
+    } else {
+        Routes.Login.route
     }
 
     NavHost(
@@ -39,9 +52,8 @@ fun AppNavigation() {
     ) {
         composable(Routes.Login.route) {
             LoginScreen(
+                authViewModel = authViewModel,
                 onLoginClick = {
-                    authRepository.setSessionActive(true)
-
                     navController.navigate(Routes.Home.route) {
                         popUpTo(Routes.Login.route) {
                             inclusive = true
@@ -59,9 +71,8 @@ fun AppNavigation() {
 
         composable(Routes.ReturningLogin.route) {
             ReturningLoginScreen(
+                authViewModel = authViewModel,
                 onLoginClick = {
-                    authRepository.setSessionActive(true)
-
                     navController.navigate(Routes.Home.route) {
                         popUpTo(Routes.ReturningLogin.route) {
                             inclusive = true
@@ -69,7 +80,7 @@ fun AppNavigation() {
                     }
                 },
                 onDifferentUserClick = {
-                    authRepository.logout()
+                    authViewModel.logout()
 
                     navController.navigate(Routes.Login.route) {
                         popUpTo(Routes.ReturningLogin.route) {
@@ -85,6 +96,7 @@ fun AppNavigation() {
 
         composable(Routes.Register.route) {
             RegisterScreen(
+                authViewModel = authViewModel,
                 onRegisterClick = {
                     navController.navigate(Routes.BiometricSetup.route)
                 },
@@ -107,6 +119,7 @@ fun AppNavigation() {
 
         composable(Routes.BiometricSetup.route) {
             BiometricSetupScreen(
+                authViewModel = authViewModel,
                 onAcceptClick = {
                     navController.navigate(Routes.Home.route) {
                         popUpTo(Routes.Login.route) {
@@ -126,6 +139,7 @@ fun AppNavigation() {
 
         composable(Routes.Home.route) {
             HomeScreen(
+                authViewModel = authViewModel,
                 onProfileClick = {
                     navController.navigate(Routes.Profile.route)
                 },
@@ -140,11 +154,12 @@ fun AppNavigation() {
 
         composable(Routes.Profile.route) {
             ProfileScreen(
+                authViewModel = authViewModel,
                 onBackClick = {
                     navController.popBackStack()
                 },
                 onLogoutClick = {
-                    authRepository.logout()
+                    authViewModel.logout()
 
                     navController.navigate(Routes.Login.route) {
                         popUpTo(Routes.Profile.route) {
@@ -163,6 +178,7 @@ fun AppNavigation() {
 
         composable(Routes.RecipeForm.route) {
             RecipeFormScreen(
+                authViewModel = authViewModel,
                 recipeId = null,
                 onSaved = {
                     navController.navigate(Routes.Home.route) {
@@ -190,6 +206,7 @@ fun AppNavigation() {
                 .orEmpty()
 
             RecipeFormScreen(
+                authViewModel = authViewModel,
                 recipeId = recipeId,
                 onSaved = {
                     navController.navigate(Routes.Profile.route) {

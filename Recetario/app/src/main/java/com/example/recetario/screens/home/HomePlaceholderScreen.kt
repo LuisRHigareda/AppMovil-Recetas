@@ -29,22 +29,20 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.AuthRepository
-import com.example.recetario.data.RecipeRepository
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.AuthTextField
 import com.example.recetario.screens.auth.RecetarioOrange
@@ -52,6 +50,8 @@ import com.example.recetario.screens.profile.UserAvatar
 import com.example.recetario.screens.recipe.RecipeImagePreview
 import com.example.recetario.screens.recipe.RecipeTagRow
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.AuthViewModel
+import com.example.recetario.viewmodel.RecipeViewModel
 
 private enum class HomeSection(val title: String) {
     MY_RECIPES("Mis recetas"),
@@ -61,25 +61,23 @@ private enum class HomeSection(val title: String) {
 
 @Composable
 fun HomeScreen(
+    authViewModel: AuthViewModel = viewModel(),
+    recipeViewModel: RecipeViewModel = viewModel(),
     onProfileClick: () -> Unit,
     onRecipeClick: (String) -> Unit,
     onAddRecipeClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val recipeRepository = remember { RecipeRepository(context) }
-    val authRepository = remember { AuthRepository(context) }
+    val recipeUiState by recipeViewModel.uiState.collectAsState()
+    val userState by authViewModel.userState.collectAsState()
 
     var selectedSection by remember { mutableStateOf(HomeSection.MY_RECIPES) }
     var searchText by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todas") }
-    var refreshCounter by remember { mutableIntStateOf(0) }
 
-    val baseRecipes = remember(selectedSection, refreshCounter) {
-        when (selectedSection) {
-            HomeSection.MY_RECIPES -> recipeRepository.getVisibleOwnRecipes()
-            HomeSection.EXPLORE -> recipeRepository.getExploreRecipes()
-            HomeSection.FAVORITES -> recipeRepository.getFavoriteRecipes()
-        }
+    val baseRecipes = when (selectedSection) {
+        HomeSection.MY_RECIPES -> recipeUiState.visibleOwnRecipes
+        HomeSection.EXPLORE -> recipeUiState.exploreRecipes
+        HomeSection.FAVORITES -> recipeUiState.favoriteRecipes
     }
 
     val categories = listOf("Todas") + baseRecipes
@@ -149,8 +147,8 @@ fun HomeScreen(
                 }
 
                 UserAvatar(
-                    initials = authRepository.getInitials(),
-                    imageUri = authRepository.getProfileImageUri(),
+                    initials = userState.initials,
+                    imageUri = userState.profileImageUri,
                     modifier = Modifier
                         .size(52.dp)
                         .clickable { onProfileClick() }
@@ -225,13 +223,12 @@ fun HomeScreen(
                     ) { recipe ->
                         RecipeCard(
                             recipe = recipe,
-                            isFavorite = recipeRepository.isFavorite(recipe.id),
+                            isFavorite = recipeViewModel.isFavorite(recipe.id),
                             onClick = {
                                 onRecipeClick(recipe.id)
                             },
                             onFavoriteClick = {
-                                recipeRepository.toggleFavorite(recipe.id)
-                                refreshCounter++
+                                recipeViewModel.toggleFavorite(recipe.id)
                             }
                         )
                     }

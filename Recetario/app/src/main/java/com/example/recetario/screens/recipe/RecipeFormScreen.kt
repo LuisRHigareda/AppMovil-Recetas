@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,32 +34,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.AuthRepository
-import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.saveBitmapToInternalStorage
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.AuthTextField
 import com.example.recetario.screens.auth.OrangeButton
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.AuthViewModel
+import com.example.recetario.viewmodel.RecipeViewModel
 
 @Composable
 fun RecipeFormScreen(
+    authViewModel: AuthViewModel = viewModel(),
+    recipeViewModel: RecipeViewModel = viewModel(),
     recipeId: String? = null,
     onSaved: () -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    val recipeRepository = remember { RecipeRepository(context) }
-    val authRepository = remember { AuthRepository(context) }
+    val userState by authViewModel.userState.collectAsState()
+    val recipeUiState by recipeViewModel.uiState.collectAsState()
 
-    val existingRecipe = remember(recipeId) {
-        recipeId?.let { recipeRepository.findRecipeById(it) }
+    val existingRecipe = remember(recipeId, recipeUiState.allRecipes) {
+        recipeId?.let { recipeViewModel.findRecipeById(it) }
     }
 
     val isEditing = existingRecipe != null
@@ -470,7 +474,7 @@ fun RecipeFormScreen(
                         tags = tags,
                         imageUri = imageUri,
                         referenceUrl = referenceUrl.trim().ifBlank { null },
-                        authorName = authRepository.getFullName(),
+                        authorName = userState.fullName,
                         isOwnRecipe = true,
                         isPublic = shareRecipe,
                         isSecret = secretRecipe,
@@ -478,8 +482,7 @@ fun RecipeFormScreen(
                         ratingCount = existingRecipe?.ratingCount ?: 0
                     )
 
-                    recipeRepository.saveUserRecipe(recipeToSave)
-                    onSaved()
+                    recipeViewModel.saveRecipe(recipeToSave, onSaved)
                 }
             },
             modifier = Modifier.widthIn(max = 360.dp)

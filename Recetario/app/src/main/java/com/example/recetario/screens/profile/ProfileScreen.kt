@@ -24,8 +24,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,15 +34,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.MonthlyFavoriteActivity
-import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.model.Recipe
@@ -53,46 +52,49 @@ import com.example.recetario.screens.auth.RecetarioLightGray
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.recipe.RecipeImagePreview
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.AuthViewModel
+import com.example.recetario.viewmodel.RecipeViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
 fun ProfileScreen(
+    authViewModel: AuthViewModel = viewModel(),
+    recipeViewModel: RecipeViewModel = viewModel(),
     onBackClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onEditRecipeClick: (String) -> Unit,
     onViewRecipeClick: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val authRepository = remember { AuthRepository(context) }
-    val recipeRepository = remember { RecipeRepository(context) }
+    val userState by authViewModel.userState.collectAsState()
+    val recipeUiState by recipeViewModel.uiState.collectAsState()
 
-    var refreshCounter by remember { mutableIntStateOf(0) }
     var isEditingProfile by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var isSecretFolderUnlocked by remember { mutableStateOf(false) }
     var secretFolderMessage by remember { mutableStateOf<String?>(null) }
 
-    var firstName by remember(refreshCounter) { mutableStateOf(authRepository.getFirstName()) }
-    var lastName by remember(refreshCounter) { mutableStateOf(authRepository.getLastName()) }
-    var birthDate by remember(refreshCounter) { mutableStateOf(authRepository.getBirthDate()) }
-    var gender by remember(refreshCounter) { mutableStateOf(authRepository.getGender()) }
+    var firstName by remember(userState.firstName) { mutableStateOf(userState.firstName) }
+    var lastName by remember(userState.lastName) { mutableStateOf(userState.lastName) }
+    var birthDate by remember(userState.birthDate) { mutableStateOf(userState.birthDate) }
+    var gender by remember(userState.gender) { mutableStateOf(userState.gender) }
 
     var firstNameError by remember { mutableStateOf<String?>(null) }
     var lastNameError by remember { mutableStateOf<String?>(null) }
     var birthDateError by remember { mutableStateOf<String?>(null) }
     var genderError by remember { mutableStateOf<String?>(null) }
 
-    val publicRecipes = remember(refreshCounter) { recipeRepository.getOwnPublicRecipes() }
-    val secretRecipes = remember(refreshCounter) { recipeRepository.getOwnSecretRecipes() }
-    val favoriteActivity = remember(refreshCounter) { recipeRepository.getFavoriteActivityLastSixMonths() }
-    val publicRecipeCount = remember(refreshCounter) { recipeRepository.getPublicRecipeCount() }
-    val privateRecipeCount = remember(refreshCounter) { recipeRepository.getPrivateRecipeCount() }
-    val fullName = remember(refreshCounter) { authRepository.getFullName() }
-    val email = remember(refreshCounter) { authRepository.getEmail() }
-    val profileImageUri = remember(refreshCounter) { authRepository.getProfileImageUri() }
-    val initials = remember(refreshCounter) { authRepository.getInitials() }
+    val publicRecipes = recipeUiState.publicRecipes
+    val secretRecipes = recipeUiState.secretRecipes
+    val favoriteActivity = recipeUiState.favoriteActivity
+    val publicRecipeCount = recipeUiState.publicRecipeCount
+    val privateRecipeCount = recipeUiState.privateRecipeCount
+    val fullName = userState.fullName
+    val email = userState.email
+    val profileImageUri = userState.profileImageUri
+    val initials = userState.initials
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -105,8 +107,7 @@ fun ProfileScreen(
                 )
             }
 
-            authRepository.setProfileImageUri(uri.toString())
-            refreshCounter++
+            authViewModel.setProfileImageUri(uri.toString())
         }
     }
 
@@ -281,16 +282,15 @@ fun ProfileScreen(
                 text = "Guardar cambios",
                 onClick = {
                     if (validateProfile()) {
-                        authRepository.updateUserProfile(
+                        authViewModel.updateUserProfile(
                             firstName = firstName,
                             lastName = lastName,
                             birthDate = birthDate,
                             gender = gender
-                        )
-
-                        isEditingProfile = false
-                        message = "Información actualizada correctamente."
-                        refreshCounter++
+                        ) {
+                            isEditingProfile = false
+                            message = "Información actualizada correctamente."
+                        }
                     }
                 },
                 modifier = Modifier.widthIn(max = 340.dp)
@@ -299,7 +299,10 @@ fun ProfileScreen(
             TextButton(
                 onClick = {
                     isEditingProfile = false
-                    refreshCounter++
+                    firstName = userState.firstName
+                    lastName = userState.lastName
+                    birthDate = userState.birthDate
+                    gender = userState.gender
                 }
             ) {
                 Text(
@@ -309,10 +312,10 @@ fun ProfileScreen(
                 )
             }
         } else {
-            ProfileInfoRow(label = "Nombre", value = authRepository.getFirstName())
-            ProfileInfoRow(label = "Apellidos", value = authRepository.getLastName())
-            ProfileInfoRow(label = "Fecha de nacimiento", value = authRepository.getBirthDate())
-            ProfileInfoRow(label = "Género", value = authRepository.getGender())
+            ProfileInfoRow(label = "Nombre", value = userState.firstName)
+            ProfileInfoRow(label = "Apellidos", value = userState.lastName)
+            ProfileInfoRow(label = "Fecha de nacimiento", value = userState.birthDate)
+            ProfileInfoRow(label = "Género", value = userState.gender)
             ProfileInfoRow(label = "Correo", value = email)
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -380,8 +383,7 @@ fun ProfileScreen(
                         onEditRecipeClick(recipe.id)
                     },
                     onDeleteClick = {
-                        recipeRepository.deleteUserRecipe(recipe.id)
-                        refreshCounter++
+                        recipeViewModel.deleteRecipe(recipe.id)
                     }
                 )
 
@@ -485,8 +487,7 @@ fun ProfileScreen(
                         onEditRecipeClick(recipe.id)
                     },
                     onDeleteClick = {
-                        recipeRepository.deleteUserRecipe(recipe.id)
-                        refreshCounter++
+                        recipeViewModel.deleteRecipe(recipe.id)
                     }
                 )
 

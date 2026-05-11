@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -19,25 +20,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.AuthViewModel
 
 @Composable
 fun LoginScreen(
+    authViewModel: AuthViewModel = viewModel(),
     onLoginClick: () -> Unit,
     onRegisterClick: () -> Unit,
     onRecoverPasswordClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val authRepository = remember { AuthRepository(context) }
+    val userState by authViewModel.userState.collectAsState()
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -126,12 +129,12 @@ fun LoginScreen(
             onClick = {
                 generalMessage = null
 
-                if (!authRepository.hasRegisteredUser()) {
+                if (!userState.hasRegisteredUser) {
                     generalMessage = "Primero debes crear una cuenta."
                     return@TextButton
                 }
 
-                if (!authRepository.isBiometricEnabled()) {
+                if (!userState.biometricEnabled) {
                     generalMessage = "La huella digital todavía no está vinculada a tu cuenta."
                     return@TextButton
                 }
@@ -148,7 +151,7 @@ fun LoginScreen(
                     title = "Huella digital",
                     subtitle = "Usa tu huella digital para entrar al recetario.",
                     onSuccess = {
-                        authRepository.setSessionActive(true)
+                        authViewModel.setSessionActive(true)
                         onLoginClick()
                     },
                     onError = { message ->
@@ -182,12 +185,16 @@ fun LoginScreen(
             text = "Iniciar Sesión",
             onClick = {
                 if (validateLogin()) {
-                    if (!authRepository.hasRegisteredUser()) {
+                    if (!userState.hasRegisteredUser) {
                         generalMessage = "Primero debes crear una cuenta."
-                    } else if (authRepository.login(email, password)) {
-                        onLoginClick()
                     } else {
-                        generalMessage = "Correo o contraseña incorrectos."
+                        authViewModel.login(email, password) { isValid ->
+                            if (isValid) {
+                                onLoginClick()
+                            } else {
+                                generalMessage = "Correo o contraseña incorrectos."
+                            }
+                        }
                     }
                 }
             },

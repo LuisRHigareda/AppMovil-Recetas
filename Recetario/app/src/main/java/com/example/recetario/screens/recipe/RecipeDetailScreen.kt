@@ -16,36 +16,35 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.RecipeRepository
 import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.OrangeButton
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.RecipeViewModel
 import java.util.Locale
 
 @Composable
 fun RecipeDetailScreen(
+    recipeViewModel: RecipeViewModel = viewModel(),
     recipeId: String,
     onBackClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val recipeRepository = remember { RecipeRepository(context) }
-    var refreshCounter by remember { mutableIntStateOf(0) }
+    val recipeUiState by recipeViewModel.uiState.collectAsState()
 
-    val recipe = remember(recipeId, refreshCounter) {
-        recipeRepository.findRecipeById(recipeId)
+    val recipe = remember(recipeId, recipeUiState.allRecipes) {
+        recipeViewModel.findRecipeById(recipeId)
     }
 
     if (recipe == null) {
@@ -53,11 +52,8 @@ fun RecipeDetailScreen(
     } else {
         RecipeDetailContent(
             recipe = recipe,
-            recipeRepository = recipeRepository,
-            onBackClick = onBackClick,
-            onRefresh = {
-                refreshCounter++
-            }
+            recipeViewModel = recipeViewModel,
+            onBackClick = onBackClick
         )
     }
 }
@@ -65,14 +61,13 @@ fun RecipeDetailScreen(
 @Composable
 private fun RecipeDetailContent(
     recipe: Recipe,
-    recipeRepository: RecipeRepository,
-    onBackClick: () -> Unit,
-    onRefresh: () -> Unit
+    recipeViewModel: RecipeViewModel,
+    onBackClick: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
-    val displayRating = recipeRepository.getDisplayRating(recipe)
-    val userRating = recipeRepository.getUserRating(recipe.id)
-    val isFavorite = recipeRepository.isFavorite(recipe.id)
+    val displayRating = recipeViewModel.getDisplayRating(recipe)
+    val userRating = recipeViewModel.getUserRating(recipe.id)
+    val isFavorite = recipeViewModel.isFavorite(recipe.id)
 
     LazyColumn(
         modifier = Modifier
@@ -151,8 +146,7 @@ private fun RecipeDetailContent(
                 OrangeButton(
                     text = if (isFavorite) "Quitar de favoritas" else "Guardar en favoritas",
                     onClick = {
-                        recipeRepository.toggleFavorite(recipe.id)
-                        onRefresh()
+                        recipeViewModel.toggleFavorite(recipe.id)
                     },
                     modifier = Modifier.widthIn(max = 320.dp)
                 )
@@ -174,8 +168,7 @@ private fun RecipeDetailContent(
                     (1..5).forEach { rating ->
                         OutlinedButton(
                             onClick = {
-                                recipeRepository.rateRecipe(recipe.id, rating)
-                                onRefresh()
+                                recipeViewModel.rateRecipe(recipe.id, rating)
                             }
                         ) {
                             Text(

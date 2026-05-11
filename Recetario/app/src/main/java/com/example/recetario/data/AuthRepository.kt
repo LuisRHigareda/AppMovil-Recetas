@@ -1,17 +1,65 @@
 package com.example.recetario.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.security.MessageDigest
 import java.util.Locale
 
+private val Context.authDataStore by preferencesDataStore(name = "recetario_auth_datastore")
+
+data class UserPreferences(
+    val firstName: String = "",
+    val lastName: String = "",
+    val birthDate: String = "",
+    val gender: String = "",
+    val email: String = "",
+    val passwordHash: String = "",
+    val biometricEnabled: Boolean = false,
+    val sessionActive: Boolean = false,
+    val profileImageUri: String? = null,
+    val isLoaded: Boolean = true
+) {
+    val hasRegisteredUser: Boolean
+        get() = email.isNotBlank() && passwordHash.isNotBlank()
+
+    val fullName: String
+        get() = "$firstName $lastName".trim().ifEmpty { "Usuario" }
+
+    val initials: String
+        get() {
+            val firstInitial = firstName.firstOrNull()?.uppercaseChar()?.toString().orEmpty()
+            val lastInitial = lastName.firstOrNull()?.uppercaseChar()?.toString().orEmpty()
+            return "$firstInitial$lastInitial"
+                .ifBlank { "U" }
+                .uppercase(Locale.getDefault())
+        }
+}
+
 class AuthRepository(context: Context) {
 
-    private val preferences = context.applicationContext.getSharedPreferences(
-        "recetario_auth_preferences",
-        Context.MODE_PRIVATE
-    )
+    private val dataStore = context.applicationContext.authDataStore
 
-    fun registerUser(
+    val userPreferencesFlow: Flow<UserPreferences> = dataStore.data.map { preferences ->
+        UserPreferences(
+            firstName = preferences[KEY_FIRST_NAME].orEmpty(),
+            lastName = preferences[KEY_LAST_NAME].orEmpty(),
+            birthDate = preferences[KEY_BIRTH_DATE].orEmpty(),
+            gender = preferences[KEY_GENDER].orEmpty(),
+            email = preferences[KEY_EMAIL].orEmpty(),
+            passwordHash = preferences[KEY_PASSWORD_HASH].orEmpty(),
+            biometricEnabled = preferences[KEY_BIOMETRIC_ENABLED] ?: false,
+            sessionActive = preferences[KEY_SESSION_ACTIVE] ?: false,
+            profileImageUri = preferences[KEY_PROFILE_IMAGE_URI]?.ifBlank { null }
+        )
+    }
+
+    suspend fun registerUser(
         firstName: String,
         lastName: String,
         birthDate: String,
@@ -19,28 +67,22 @@ class AuthRepository(context: Context) {
         email: String,
         password: String
     ) {
-        preferences.edit()
-            .putString(KEY_FIRST_NAME, firstName.trim())
-            .putString(KEY_LAST_NAME, lastName.trim())
-            .putString(KEY_BIRTH_DATE, birthDate.trim())
-            .putString(KEY_GENDER, gender.trim())
-            .putString(KEY_EMAIL, email.trim().lowercase())
-            .putString(KEY_PASSWORD_HASH, hashPassword(password))
-            .putBoolean(KEY_BIOMETRIC_ENABLED, false)
-            .putBoolean(KEY_SESSION_ACTIVE, true)
-            .apply()
+        dataStore.edit { preferences ->
+            preferences[KEY_FIRST_NAME] = firstName.trim()
+            preferences[KEY_LAST_NAME] = lastName.trim()
+            preferences[KEY_BIRTH_DATE] = birthDate.trim()
+            preferences[KEY_GENDER] = gender.trim()
+            preferences[KEY_EMAIL] = email.trim().lowercase()
+            preferences[KEY_PASSWORD_HASH] = hashPassword(password)
+            preferences[KEY_BIOMETRIC_ENABLED] = false
+            preferences[KEY_SESSION_ACTIVE] = true
+        }
     }
 
-    fun hasRegisteredUser(): Boolean {
-        return preferences.getString(KEY_EMAIL, null) != null
-    }
-
-    fun login(email: String, password: String): Boolean {
-        val savedEmail = preferences.getString(KEY_EMAIL, null)
-        val savedPasswordHash = preferences.getString(KEY_PASSWORD_HASH, null)
-
-        val isValid = savedEmail == email.trim().lowercase() &&
-                savedPasswordHash == hashPassword(password)
+    suspend fun login(email: String, password: String): Boolean {
+        val currentUser = userPreferencesFlow.first()
+        val isValid = currentUser.email == email.trim().lowercase() &&
+                currentUser.passwordHash == hashPassword(password)
 
         if (isValid) {
             setSessionActive(true)
@@ -49,10 +91,9 @@ class AuthRepository(context: Context) {
         return isValid
     }
 
-    fun loginWithSavedUser(password: String): Boolean {
-        val savedPasswordHash = preferences.getString(KEY_PASSWORD_HASH, null)
-
-        val isValid = savedPasswordHash == hashPassword(password)
+    suspend fun loginWithSavedUser(password: String): Boolean {
+        val currentUser = userPreferencesFlow.first()
+        val isValid = currentUser.passwordHash == hashPassword(password)
 
         if (isValid) {
             setSessionActive(true)
@@ -61,95 +102,40 @@ class AuthRepository(context: Context) {
         return isValid
     }
 
-    fun updateUserProfile(
+    suspend fun updateUserProfile(
         firstName: String,
         lastName: String,
         birthDate: String,
         gender: String
     ) {
-        preferences.edit()
-            .putString(KEY_FIRST_NAME, firstName.trim())
-            .putString(KEY_LAST_NAME, lastName.trim())
-            .putString(KEY_BIRTH_DATE, birthDate.trim())
-            .putString(KEY_GENDER, gender.trim())
-            .apply()
-    }
-
-    fun setProfileImageUri(uri: String?) {
-        preferences.edit()
-            .putString(KEY_PROFILE_IMAGE_URI, uri ?: "")
-            .apply()
-    }
-
-    fun getProfileImageUri(): String? {
-        return preferences.getString(KEY_PROFILE_IMAGE_URI, "")
-            ?.ifBlank { null }
-    }
-
-    fun setBiometricEnabled(enabled: Boolean) {
-        preferences.edit()
-            .putBoolean(KEY_BIOMETRIC_ENABLED, enabled)
-            .apply()
-    }
-
-    fun isBiometricEnabled(): Boolean {
-        return preferences.getBoolean(KEY_BIOMETRIC_ENABLED, false)
-    }
-
-    fun setSessionActive(active: Boolean) {
-        preferences.edit()
-            .putBoolean(KEY_SESSION_ACTIVE, active)
-            .apply()
-    }
-
-    fun isSessionActive(): Boolean {
-        return preferences.getBoolean(KEY_SESSION_ACTIVE, false)
-    }
-
-    fun logout() {
-        preferences.edit()
-            .putBoolean(KEY_SESSION_ACTIVE, false)
-            .apply()
-    }
-
-    fun getFirstName(): String {
-        return preferences.getString(KEY_FIRST_NAME, "") ?: ""
-    }
-
-    fun getLastName(): String {
-        return preferences.getString(KEY_LAST_NAME, "") ?: ""
-    }
-
-    fun getBirthDate(): String {
-        return preferences.getString(KEY_BIRTH_DATE, "") ?: ""
-    }
-
-    fun getGender(): String {
-        return preferences.getString(KEY_GENDER, "") ?: ""
-    }
-
-    fun getEmail(): String {
-        return preferences.getString(KEY_EMAIL, "") ?: ""
-    }
-
-    fun getFullName(): String {
-        val firstName = getFirstName()
-        val lastName = getLastName()
-
-        val fullName = "$firstName $lastName".trim()
-
-        return fullName.ifEmpty {
-            "Usuario"
+        dataStore.edit { preferences ->
+            preferences[KEY_FIRST_NAME] = firstName.trim()
+            preferences[KEY_LAST_NAME] = lastName.trim()
+            preferences[KEY_BIRTH_DATE] = birthDate.trim()
+            preferences[KEY_GENDER] = gender.trim()
         }
     }
 
-    fun getInitials(): String {
-        val firstInitial = getFirstName().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
-        val lastInitial = getLastName().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
+    suspend fun setProfileImageUri(uri: String?) {
+        dataStore.edit { preferences ->
+            preferences[KEY_PROFILE_IMAGE_URI] = uri.orEmpty()
+        }
+    }
 
-        return "$firstInitial$lastInitial"
-            .ifBlank { "U" }
-            .uppercase(Locale.getDefault())
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_BIOMETRIC_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setSessionActive(active: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_SESSION_ACTIVE] = active
+        }
+    }
+
+    suspend fun logout() {
+        setSessionActive(false)
     }
 
     private fun hashPassword(password: String): String {
@@ -160,14 +146,14 @@ class AuthRepository(context: Context) {
     }
 
     companion object {
-        private const val KEY_FIRST_NAME = "first_name"
-        private const val KEY_LAST_NAME = "last_name"
-        private const val KEY_BIRTH_DATE = "birth_date"
-        private const val KEY_GENDER = "gender"
-        private const val KEY_EMAIL = "email"
-        private const val KEY_PASSWORD_HASH = "password_hash"
-        private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
-        private const val KEY_SESSION_ACTIVE = "session_active"
-        private const val KEY_PROFILE_IMAGE_URI = "profile_image_uri"
+        private val KEY_FIRST_NAME = stringPreferencesKey("first_name")
+        private val KEY_LAST_NAME = stringPreferencesKey("last_name")
+        private val KEY_BIRTH_DATE = stringPreferencesKey("birth_date")
+        private val KEY_GENDER = stringPreferencesKey("gender")
+        private val KEY_EMAIL = stringPreferencesKey("email")
+        private val KEY_PASSWORD_HASH = stringPreferencesKey("password_hash")
+        private val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        private val KEY_SESSION_ACTIVE = booleanPreferencesKey("session_active")
+        private val KEY_PROFILE_IMAGE_URI = stringPreferencesKey("profile_image_uri")
     }
 }

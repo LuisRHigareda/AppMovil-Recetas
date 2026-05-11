@@ -18,23 +18,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.findFragmentActivity
 import com.example.recetario.data.showBiometricPrompt
 import com.example.recetario.ui.theme.RecetarioTheme
+import com.example.recetario.viewmodel.AuthViewModel
 
 @Composable
 fun BiometricSetupScreen(
+    authViewModel: AuthViewModel = viewModel(),
     onAcceptClick: () -> Unit,
     onSkipClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val authRepository = remember { AuthRepository(context) }
 
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -99,8 +100,8 @@ fun BiometricSetupScreen(
                     title = "Vincular huella digital",
                     subtitle = "Confirma tu huella digital para activar el acceso.",
                     onSuccess = {
-                        authRepository.setBiometricEnabled(true)
-                        authRepository.setSessionActive(true)
+                        authViewModel.setBiometricEnabled(true)
+                        authViewModel.setSessionActive(true)
                         onAcceptClick()
                     },
                     onError = { error ->
@@ -118,8 +119,8 @@ fun BiometricSetupScreen(
 
         TextButton(
             onClick = {
-                authRepository.setBiometricEnabled(false)
-                authRepository.setSessionActive(true)
+                authViewModel.setBiometricEnabled(false)
+                authViewModel.setSessionActive(true)
                 onSkipClick()
             }
         ) {
