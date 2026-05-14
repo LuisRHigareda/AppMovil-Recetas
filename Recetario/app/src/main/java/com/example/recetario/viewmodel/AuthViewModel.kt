@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.recetario.data.AuthRepository
 import com.example.recetario.data.LoginResult
+import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.RegisterUserResult
 import com.example.recetario.data.UserPreferences
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,6 +16,8 @@ import kotlinx.coroutines.launch
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AuthRepository(application)
+
+    private val recipeRepository = RecipeRepository(application)
 
     val userState: StateFlow<UserPreferences> = repository.userPreferencesFlow.stateIn(
         scope = viewModelScope,
@@ -50,7 +53,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         onResult: (LoginResult) -> Unit
     ) {
         viewModelScope.launch {
-            onResult(repository.login(email, password))
+            val result = repository.login(email, password)
+
+            // OFFLINE-FIRST: Verificamos si el login fue exitoso.
+            // *NOTA: Cambia 'LoginResult.SUCCESS' por el valor real que uses en tu clase LoginResult*
+            if (result.isValid) {
+                // Lo lanzamos en una nueva corrutina para no bloquear la UI.
+                // El usuario entrará al Home y verá cómo las recetas aparecen mágicamente.
+                viewModelScope.launch {
+                    recipeRepository.restoreUserDataFromCloud(email)
+                }
+            }
+            onResult(result)
         }
     }
 
@@ -59,7 +73,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         onResult: (LoginResult) -> Unit
     ) {
         viewModelScope.launch {
-            onResult(repository.loginWithSavedUser(password))
+            val result = repository.loginWithSavedUser(password)
+
+            // OFFLINE-FIRST: Igual aquí, si entra con biometría o sesión guardada
+            if (result.isValid) {
+                // Como en esta función no pasamos el email por parámetro,
+                // lo sacamos del userState actual.
+                val currentUserEmail = userState.value.email
+                if (currentUserEmail.isNotEmpty()) {
+                    viewModelScope.launch {
+                        recipeRepository.restoreUserDataFromCloud(currentUserEmail)
+                    }
+                }
+            }
+
+            onResult(result)
         }
     }
 

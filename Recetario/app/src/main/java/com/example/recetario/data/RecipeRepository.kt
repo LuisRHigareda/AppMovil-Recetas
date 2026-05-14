@@ -1,12 +1,17 @@
 package com.example.recetario.data
 
+import com.example.recetario.data.firebase.FirebaseDataSource
 import android.content.Context
+import com.example.recetario.data.firebase.toEntity
+import com.example.recetario.data.firebase.toFirebase
 import com.example.recetario.data.local.AppDatabase
 import com.example.recetario.data.local.FavoriteRecipeEntity
+import com.example.recetario.data.local.RecipeEntity
 import com.example.recetario.data.local.RecipeRatingEntity
 import com.example.recetario.data.local.toDomain
 import com.example.recetario.data.local.toEntity
 import com.example.recetario.model.Recipe
+import com.example.recetario.worker.SyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.YearMonth
@@ -18,9 +23,11 @@ data class MonthlyFavoriteActivity(
     val savedCount: Int
 )
 
-class RecipeRepository(context: Context) {
+class RecipeRepository(private val context: Context) {
 
     private val recipeDao = AppDatabase.getInstance(context).recipeDao()
+
+    private val firebaseDataSource = FirebaseDataSource()
 
     fun observeOwnRecipes(ownerEmail: String): Flow<List<Recipe>> {
         return recipeDao.observeOwnRecipes(ownerEmail.normalizeEmail()).map { recipes ->
@@ -48,18 +55,39 @@ class RecipeRepository(context: Context) {
 
     suspend fun saveUserRecipe(ownerEmail: String, recipe: Recipe) {
         val normalizedOwnerEmail = ownerEmail.normalizeEmail()
-        recipeDao.upsertRecipe(
-            recipe
-                .copy(ownerEmail = normalizedOwnerEmail, isOwnRecipe = true)
-                .toEntity(ownerEmailOverride = normalizedOwnerEmail)
-        )
+
+        // OFFLINE-FIRST: Creamos la entidad con isSyncedStatus = false y isDeleted = false
+        val entity = recipe
+            .copy(ownerEmail = normalizedOwnerEmail, isOwnRecipe = true)
+            .toEntity(
+                ownerEmailOverride = normalizedOwnerEmail,
+                isSyncedStatus = false,
+                isDeletedStatus = false
+            )
+
+        recipeDao.upsertRecipe(entity)
+
+        syncSingleRecipe(entity)
+
+        // ¡GATILLO! Red de seguridad por si falla
+        SyncManager.scheduleSync(context)
     }
 
     suspend fun deleteUserRecipe(ownerEmail: String, recipeId: String) {
         val normalizedOwnerEmail = ownerEmail.normalizeEmail()
+
+        // OFFLINE-FIRST: Usamos el borrado lógico. La receta desaparece de la UI,
+        // pero sigue en Room marcada con isDeleted = 1 e isSynced = 0.
+        recipeDao.markRecipeAsDeleted(normalizedOwnerEmail, recipeId)
+
         recipeDao.deleteRecipe(normalizedOwnerEmail, recipeId)
         recipeDao.deleteFavoriteForAllUsers(recipeId)
         recipeDao.deleteRatingForAllUsers(recipeId)
+
+        syncRecipeDeletion(recipeId)
+
+        // ¡GATILLO! Red de seguridad
+        SyncManager.scheduleSync(context)
     }
 
     suspend fun toggleFavorite(ownerEmail: String, recipeId: String) {
@@ -68,28 +96,41 @@ class RecipeRepository(context: Context) {
 
         if (isFavorite) {
             recipeDao.deleteFavorite(normalizedOwnerEmail, recipeId)
+            firebaseDataSource.deleteFavorite(normalizedOwnerEmail, recipeId)
         } else {
-            recipeDao.insertFavorite(
-                FavoriteRecipeEntity(
-                    ownerEmail = normalizedOwnerEmail,
-                    recipeId = recipeId,
-                    savedYearMonth = YearMonth.now().toString()
-                )
+            // Agregamos favorito
+            val entity = FavoriteRecipeEntity(
+                ownerEmail = normalizedOwnerEmail,
+                recipeId = recipeId,
+                savedYearMonth = YearMonth.now().toString(),
+                isSynced = false,
+                isDeleted = false
             )
+
+            recipeDao.insertFavorite(entity)
+            syncSingleFavorite(entity)
         }
+
+        // ¡GATILLO! Cubre tanto si se agregó como si se borró
+        SyncManager.scheduleSync(context)
     }
 
     suspend fun rateRecipe(ownerEmail: String, recipeId: String, rating: Int) {
         val normalizedOwnerEmail = ownerEmail.normalizeEmail()
 
         if (rating in 1..5) {
-            recipeDao.upsertRating(
-                RecipeRatingEntity(
-                    ownerEmail = normalizedOwnerEmail,
-                    recipeId = recipeId,
-                    rating = rating
-                )
+            val entity = RecipeRatingEntity(
+                ownerEmail = normalizedOwnerEmail,
+                recipeId = recipeId,
+                rating = rating,
+                isSynced = false,
+                isDeleted = false
             )
+            recipeDao.upsertRating(entity)
+            syncSingleRating(entity)
+
+            // ¡GATILLO!
+            SyncManager.scheduleSync(context)
         }
     }
 
@@ -217,4 +258,84 @@ class RecipeRepository(context: Context) {
     }
 
     private fun String.normalizeEmail(): String = trim().lowercase(Locale.getDefault())
+
+    private suspend fun syncSingleRecipe(entity: RecipeEntity) {
+        val success = firebaseDataSource.saveRecipe(entity.toFirebase())
+        if (success) {
+            recipeDao.updateRecipeSyncStatus(entity.id, isSynced = true)
+        }
+    }
+
+    private suspend fun syncRecipeDeletion(recipeId: String) {
+        val success = firebaseDataSource.deleteRecipe(recipeId)
+        if (success) {
+            // OFFLINE-FIRST: Si la nube confirma que lo borró, AHORA SÍ lo borramos físicamente de Room
+            recipeDao.hardDeleteRecipe(recipeId)
+        }
+    }
+
+    private suspend fun syncSingleFavorite(entity: FavoriteRecipeEntity) {
+        val success = firebaseDataSource.saveFavorite(entity.toFirebase())
+        if (success) {
+            // Ojo: Asegúrate de tener esta función en tu RecipeDao
+            recipeDao.updateFavoriteSyncStatus(entity.ownerEmail, entity.recipeId, isSynced = true)
+        }
+    }
+
+    private suspend fun syncSingleRating(entity: RecipeRatingEntity) {
+        val success = firebaseDataSource.saveRating(entity.toFirebase())
+        if (success) {
+            // Ojo: Asegúrate de tener esta función en tu RecipeDao
+            recipeDao.updateRatingSyncStatus(entity.ownerEmail, entity.recipeId, isSynced = true)
+        }
+    }
+
+    suspend fun syncAllPendingData() {
+        // 1. Subir recetas pendientes (Nuevas o Editadas)
+        val pendingUpserts = recipeDao.getUnsyncedRecipes().filter { !it.isDeleted }
+        for (recipe in pendingUpserts) {
+            syncSingleRecipe(recipe)
+        }
+
+        // 2. Ejecutar borrados pendientes
+        val pendingDeletions = recipeDao.getRecipesPendingDeletion()
+        for (recipe in pendingDeletions) {
+            syncRecipeDeletion(recipe.id)
+        }
+
+        // (Aquí podrías agregar las subidas pendientes de Favoritos y Ratings usando lógica similar)
+    }
+
+    // ====================================================================
+    // RESTAURACIÓN (DE LA NUBE A ROOM)
+    // ====================================================================
+    /**
+     * Descarga todo el contenido del usuario desde Firebase y lo guarda en Room.
+     * Se debe llamar al iniciar sesión o al detectar una cuenta nueva.
+     */
+    suspend fun restoreUserDataFromCloud(ownerEmail: String) {
+        val normalizedEmail = ownerEmail.normalizeEmail()
+
+        // 1. DESCARGAR RECETAS
+        val cloudRecipes = firebaseDataSource.getUserRecipes(normalizedEmail)
+        cloudRecipes.forEach { recipeFirebase ->
+            // El mapper .toEntity() ya pone isSynced = true y isDeleted = false por defecto
+            val entity = recipeFirebase.toEntity()
+            recipeDao.upsertRecipe(entity)
+        }
+
+        // 2. DESCARGAR CALIFICACIONES
+        // (Asumiendo que agregaste getUserRatings a FirebaseDataSource)
+        val cloudRatings = firebaseDataSource.getUserRatings(normalizedEmail)
+        cloudRatings.forEach { ratingFirebase ->
+            recipeDao.upsertRating(ratingFirebase.toEntity())
+        }
+
+        // 3. DESCARGAR FAVORITOS
+        // (Asumiendo que agregaste getUserFavorites a FirebaseDataSource)
+        val cloudFavorites = firebaseDataSource.getUserFavorites(normalizedEmail)
+        cloudFavorites.forEach { favoriteFirebase ->
+            recipeDao.insertFavorite(favoriteFirebase.toEntity())
+        }
+    }
 }

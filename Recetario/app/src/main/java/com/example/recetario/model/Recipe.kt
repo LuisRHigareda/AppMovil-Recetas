@@ -16,5 +16,6 @@ data class Recipe(
     val isPublic: Boolean,
     val isSecret: Boolean,
     val ratingAverage: Double = 0.0,
-    val ratingCount: Int = 0
+    val ratingCount: Int = 0,
+    val isSynced: Boolean = true
 )

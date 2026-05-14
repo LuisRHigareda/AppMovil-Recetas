@@ -8,11 +8,24 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RecipeDao {
-    @Query("SELECT * FROM own_recipes WHERE ownerEmail = :ownerEmail ORDER BY name COLLATE NOCASE ASC")
+    // MODIFICADO: Agregamos "AND isDeleted = 0" para que la UI no muestre lo que se está borrando
+    @Query("SELECT * FROM own_recipes WHERE ownerEmail = :ownerEmail AND isDeleted = 0 ORDER BY name COLLATE NOCASE ASC")
     fun observeOwnRecipes(ownerEmail: String): Flow<List<RecipeEntity>>
 
     @Query("SELECT * FROM own_recipes WHERE isPublic = 1 AND isSecret = 0 ORDER BY name COLLATE NOCASE ASC")
     fun observePublicUserRecipes(): Flow<List<RecipeEntity>>
+
+    // NUEVO: Función para "borrado lógico" (Soft Delete)
+    @Query("UPDATE own_recipes SET isDeleted = 1, isSynced = 0 WHERE ownerEmail = :ownerEmail AND id = :recipeId")
+    suspend fun markRecipeAsDeleted(ownerEmail: String, recipeId: String)
+
+    // NUEVO: Buscar lo que hay que borrar físicamente en Firebase
+    @Query("SELECT * FROM own_recipes WHERE isDeleted = 1 AND isSynced = 0")
+    suspend fun getRecipesPendingDeletion(): List<RecipeEntity>
+
+    // NUEVO: Borrado físico (solo se usa DESPUÉS de que Firebase confirme el borrado)
+    @Query("DELETE FROM own_recipes WHERE id = :recipeId")
+    suspend fun hardDeleteRecipe(recipeId: String)
 
     @Query("SELECT * FROM own_recipes WHERE ownerEmail = :ownerEmail AND id = :recipeId LIMIT 1")
     suspend fun getOwnRecipeById(ownerEmail: String, recipeId: String): RecipeEntity?
@@ -49,4 +62,28 @@ interface RecipeDao {
 
     @Query("DELETE FROM recipe_ratings WHERE recipeId = :recipeId")
     suspend fun deleteRatingForAllUsers(recipeId: String)
+
+    // --- RECETAS ---
+    // Busca todas las recetas que se crearon offline y aún no suben
+    @Query("SELECT * FROM own_recipes WHERE isSynced = 0")
+    suspend fun getUnsyncedRecipes(): List<RecipeEntity>
+
+    // Actualiza la bandera de una receta cuando Firebase confirma que se guardó
+    @Query("UPDATE own_recipes SET isSynced = :isSynced WHERE id = :recipeId")
+    suspend fun updateRecipeSyncStatus(recipeId: String, isSynced: Boolean)
+
+    // --- CALIFICACIONES ---
+    @Query("SELECT * FROM recipe_ratings WHERE isSynced = 0")
+    suspend fun getUnsyncedRatings(): List<RecipeRatingEntity>
+
+    // Como tiene llave compuesta, necesitamos ambos datos para actualizar el correcto
+    @Query("UPDATE recipe_ratings SET isSynced = :isSynced WHERE ownerEmail = :ownerEmail AND recipeId = :recipeId")
+    suspend fun updateRatingSyncStatus(ownerEmail: String, recipeId: String, isSynced: Boolean)
+
+    // --- FAVORITOS ---
+    @Query("SELECT * FROM favorite_recipes WHERE isSynced = 0")
+    suspend fun getUnsyncedFavorites(): List<FavoriteRecipeEntity>
+
+    @Query("UPDATE favorite_recipes SET isSynced = :isSynced WHERE ownerEmail = :ownerEmail AND recipeId = :recipeId")
+    suspend fun updateFavoriteSyncStatus(ownerEmail: String, recipeId: String, isSynced: Boolean)
 }

@@ -9,5 +9,7 @@ import androidx.room.Entity
 data class FavoriteRecipeEntity(
     val ownerEmail: String,
     val recipeId: String,
-    val savedYearMonth: String
+    val savedYearMonth: String,
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false
 )

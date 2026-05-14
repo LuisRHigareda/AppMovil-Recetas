@@ -9,5 +9,7 @@ import androidx.room.Entity
 data class RecipeRatingEntity(
     val ownerEmail: String,
     val recipeId: String,
-    val rating: Int
+    val rating: Int,
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false
 )

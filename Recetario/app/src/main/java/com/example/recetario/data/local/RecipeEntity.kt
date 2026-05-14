@@ -21,7 +21,9 @@ data class RecipeEntity(
     val isPublic: Boolean,
     val isSecret: Boolean,
     val ratingAverage: Double,
-    val ratingCount: Int
+    val ratingCount: Int,
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false
 )
 
 fun RecipeEntity.toDomain(): Recipe {
@@ -41,11 +43,12 @@ fun RecipeEntity.toDomain(): Recipe {
         isPublic = isPublic,
         isSecret = isSecret,
         ratingAverage = ratingAverage,
-        ratingCount = ratingCount
+        ratingCount = ratingCount,
+        isSynced = isSynced
     )
 }
 
-fun Recipe.toEntity(ownerEmailOverride: String = ownerEmail): RecipeEntity {
+fun Recipe.toEntity(ownerEmailOverride: String = ownerEmail, isSyncedStatus: Boolean = false, isDeletedStatus: Boolean = false): RecipeEntity {
     return RecipeEntity(
         id = id,
         ownerEmail = ownerEmailOverride,
@@ -62,6 +65,8 @@ fun Recipe.toEntity(ownerEmailOverride: String = ownerEmail): RecipeEntity {
         isPublic = isPublic,
         isSecret = isSecret,
         ratingAverage = ratingAverage,
-        ratingCount = ratingCount
+        ratingCount = ratingCount,
+        isSynced = isSyncedStatus,
+        isDeleted = isDeletedStatus
     )
 }

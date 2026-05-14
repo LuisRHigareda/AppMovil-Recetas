@@ -12,7 +12,7 @@ import androidx.room.TypeConverters
         FavoriteRecipeEntity::class,
         RecipeRatingEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(StringListConverter::class)
