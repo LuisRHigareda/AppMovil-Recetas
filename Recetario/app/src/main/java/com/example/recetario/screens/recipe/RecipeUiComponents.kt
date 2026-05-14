@@ -10,8 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -24,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.example.recetario.model.Recipe
 import com.example.recetario.screens.auth.RecetarioLightGray
 
 @Composable
@@ -123,6 +129,36 @@ fun RecipeTagRow(
                         shape = RoundedCornerShape(50)
                     )
                     .padding(horizontal = 8.dp, vertical = 3.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun SyncStatusIcon(
+    recipe: Recipe,
+    modifier: Modifier = Modifier
+) {
+    // Si la receta no es del usuario (ej. recetas públicas por defecto),
+    // no necesitamos mostrar el estatus de la nube.
+    if (!recipe.isOwnRecipe) return
+
+    Box(modifier = modifier) {
+        if (recipe.isSynced) {
+            // Sincronizado: Palomita verde
+            Icon(
+                imageVector = Icons.Default.CloudDone,
+                contentDescription = "Respaldado en la nube",
+                tint = Color(0xFF4CAF50), // Verde que indica éxito
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            // Pendiente: Nube con flechas circulares
+            Icon(
+                imageVector = Icons.Default.CloudSync,
+                contentDescription = "Sincronización pendiente",
+                tint = Color(0xFFFF9800), // Naranja que indica "en espera"
+                modifier = Modifier.size(20.dp)
             )
         }
     }

@@ -49,6 +49,7 @@ import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.profile.UserAvatar
 import com.example.recetario.screens.recipe.RecipeImagePreview
 import com.example.recetario.screens.recipe.RecipeTagRow
+import com.example.recetario.screens.recipe.SyncStatusIcon
 import com.example.recetario.ui.theme.RecetarioTheme
 import com.example.recetario.viewmodel.AuthViewModel
 import com.example.recetario.viewmodel.RecipeViewModel
@@ -316,14 +317,27 @@ private fun RecipeCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = recipe.name,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                //OFFLINE-FIRST: Row para Título + Ícono de Sincronización
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = recipe.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f) // Evita que el texto empuje al ícono
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Inyectamos el ícono de estatus
+                    SyncStatusIcon(recipe = recipe)
+                }
 
                 Text(
                     text = recipe.category,

@@ -20,6 +20,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -65,6 +66,8 @@ private fun RecipeDetailContent(
     onBackClick: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val locale = configuration.locales[0]
     val displayRating = recipeViewModel.getDisplayRating(recipe)
     val userRating = recipeViewModel.getUserRating(recipe.id)
     val isFavorite = recipeViewModel.isFavorite(recipe.id)
@@ -98,12 +101,26 @@ private fun RecipeDetailContent(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            Text(
-                text = recipe.name,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = recipe.name,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    // Usamos weight(1f) para que si el título es muy largo, baje a
+                    // la siguiente línea en lugar de empujar el ícono fuera de la pantalla
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // ¡AQUÍ ESTÁ NUESTRO COMPONENTE DE SINCRONIZACIÓN!
+                SyncStatusIcon(recipe = recipe)
+            }
 
             Text(
                 text = if (recipe.isOwnRecipe) {
@@ -128,7 +145,7 @@ private fun RecipeDetailContent(
 
                 Text(
                     text = "Calificación promedio: ${
-                        String.format(Locale.getDefault(), "%.1f", displayRating)
+                        String.format(locale, "%.1f", displayRating)
                     }/5",
                     fontSize = 16.sp,
                     color = Color.Black,
