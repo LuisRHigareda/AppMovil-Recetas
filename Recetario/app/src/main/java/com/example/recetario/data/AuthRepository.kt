@@ -26,7 +26,8 @@ data class UserPreferences(
     val sessionActive: Boolean = false,
     val profileImageUri: String? = null,
     val registeredEmails: Set<String> = emptySet(),
-    val isLoaded: Boolean = true
+    val isLoaded: Boolean = true,
+    val isProfileSynced: Boolean = false
 ) {
     val hasRegisteredUser: Boolean
         get() = email.isNotBlank() && passwordHash.isNotBlank()
@@ -83,7 +84,8 @@ class AuthRepository(context: Context) {
                     ?: (preferences[biometricEnabledKey(currentEmail)] ?: false),
                 sessionActive = preferences[KEY_SESSION_ACTIVE] ?: false,
                 profileImageUri = preferences[profileImageUriKey(currentEmail)]?.ifBlank { null },
-                registeredEmails = registeredEmails
+                registeredEmails = registeredEmails,
+                isProfileSynced = preferences[isProfileSyncedKey(currentEmail)] ?: false
             )
         }
     }
@@ -121,6 +123,7 @@ class AuthRepository(context: Context) {
             preferences[biometricSetupCompletedKey(normalizedEmail)] = false
             preferences[profileImageUriKey(normalizedEmail)] = ""
             preferences[KEY_SESSION_ACTIVE] = true
+            preferences[isProfileSyncedKey(normalizedEmail)] = false
         }
 
         return RegisterUserResult.Success
@@ -182,6 +185,7 @@ class AuthRepository(context: Context) {
             preferences[lastNameKey(currentEmail)] = lastName.trim()
             preferences[birthDateKey(currentEmail)] = birthDate.trim()
             preferences[genderKey(currentEmail)] = gender.trim()
+            preferences[isProfileSyncedKey(currentEmail)] = false
         }
     }
 
@@ -192,6 +196,7 @@ class AuthRepository(context: Context) {
 
         dataStore.edit { preferences ->
             preferences[profileImageUriKey(currentEmail)] = uri.orEmpty()
+            preferences[isProfileSyncedKey(currentEmail)] = false
         }
     }
 
@@ -214,6 +219,44 @@ class AuthRepository(context: Context) {
 
     suspend fun logout() {
         setSessionActive(false)
+    }
+
+    suspend fun markProfileAsSynced(email: String) {
+        val normalizedEmail = email.normalizeEmail()
+        dataStore.edit { preferences ->
+            preferences[isProfileSyncedKey(normalizedEmail)] = true
+        }
+    }
+
+    // OFFLINE-FIRST: Descarga el perfil de la nube y lo guarda localmente
+    suspend fun syncProfileFromCloud(email: String): Boolean {
+        val firebaseDataSource = com.example.recetario.data.firebase.FirebaseDataSource()
+        val remoteProfile = firebaseDataSource.getUserProfile(email.normalizeEmail())
+
+        return if (remoteProfile != null) {
+            dataStore.edit { preferences ->
+                val normalizedEmail = email.normalizeEmail()
+
+                // Registramos el email en la lista de cuentas del dispositivo
+                val updatedEmails = preferences[KEY_REGISTERED_EMAILS].orEmpty().toMutableSet()
+                updatedEmails.add(normalizedEmail)
+                preferences[KEY_REGISTERED_EMAILS] = updatedEmails
+
+                // Guardamos todos los datos descargados
+                preferences[firstNameKey(normalizedEmail)] = remoteProfile.firstName
+                preferences[lastNameKey(normalizedEmail)] = remoteProfile.lastName
+                preferences[birthDateKey(normalizedEmail)] = remoteProfile.birthDate
+                preferences[genderKey(normalizedEmail)] = remoteProfile.gender
+                preferences[passwordHashKey(normalizedEmail)] = remoteProfile.passwordHash
+                preferences[profileImageUriKey(normalizedEmail)] = remoteProfile.profileImageUri.orEmpty()
+
+                // Como viene de la nube, marcamos que ya está sincronizado
+                preferences[isProfileSyncedKey(normalizedEmail)] = true
+            }
+            true
+        } else {
+            false
+        }
     }
 
     private fun hashPassword(password: String): String {
@@ -245,5 +288,8 @@ class AuthRepository(context: Context) {
         private fun biometricEnabledKey(email: String) = booleanPreferencesKey("user_${userKey(email)}_biometric_enabled")
         private fun biometricSetupCompletedKey(email: String) = booleanPreferencesKey("user_${userKey(email)}_biometric_setup_completed")
         private fun profileImageUriKey(email: String) = stringPreferencesKey("user_${userKey(email)}_profile_image_uri")
+
+        // OFFLINE-FIRST: Nueva llave para guardar el estado de sincronización del perfil
+        private fun isProfileSyncedKey(email: String) = booleanPreferencesKey("user_${userKey(email)}_is_profile_synced")
     }
 }

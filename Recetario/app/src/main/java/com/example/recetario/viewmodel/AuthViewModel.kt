@@ -8,6 +8,7 @@ import com.example.recetario.data.LoginResult
 import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.RegisterUserResult
 import com.example.recetario.data.UserPreferences
+import com.example.recetario.worker.SyncManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -44,6 +45,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 password = password
             )
             onResult(result)
+            SyncManager.scheduleProfileSync(getApplication())
         }
     }
 
@@ -53,17 +55,31 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         onResult: (LoginResult) -> Unit
     ) {
         viewModelScope.launch {
-            val result = repository.login(email, password)
+            // 1. Intentamos el login local
+            var result = repository.login(email, password)
 
-            // OFFLINE-FIRST: Verificamos si el login fue exitoso.
-            // *NOTA: Cambia 'LoginResult.SUCCESS' por el valor real que uses en tu clase LoginResult*
-            if (result.isValid) {
+            // OFFLINE-FIRST: Si el login FALLÓ localmente (!result.isValid),
+            // asumimos que es porque borró los datos o es celular nuevo.
+            if (!result.isValid) {
+                // 2. ¡Rescate! Intentamos traerlo de Firebase
+                val synced = repository.syncProfileFromCloud(email)
+
+                if (synced) {
+                    // 3. Si se descargó con éxito, volvemos a intentar el login local
+                    // ahora que los datos y el passwordHash ya viven en el DataStore
+                    result = repository.login(email, password)
+                }
+            }
+
+            // 4. Si después de todo el proceso el login es exitoso
+            if(result.isValid){
                 // Lo lanzamos en una nueva corrutina para no bloquear la UI.
                 // El usuario entrará al Home y verá cómo las recetas aparecen mágicamente.
                 viewModelScope.launch {
                     recipeRepository.restoreUserDataFromCloud(email)
                 }
             }
+
             onResult(result)
         }
     }
@@ -105,6 +121,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 birthDate = birthDate,
                 gender = gender
             )
+
+            SyncManager.scheduleProfileSync(getApplication())
+
             onSuccess()
         }
     }
@@ -112,6 +131,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun setProfileImageUri(uri: String?) {
         viewModelScope.launch {
             repository.setProfileImageUri(uri)
+            SyncManager.scheduleProfileSync(getApplication())
         }
     }
 

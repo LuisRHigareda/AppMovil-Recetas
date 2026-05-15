@@ -57,4 +57,17 @@ object SyncManager {
         // 3. Lo metemos a la cola del sistema
         WorkManager.getInstance(context).enqueue(syncRequest)
     }
+
+    // OFFLINE-FIRST: EL NUEVO para el perfil de usuario
+    fun scheduleProfileSync(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = OneTimeWorkRequestBuilder<UserProfileWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueue(syncRequest)
+    }
 }

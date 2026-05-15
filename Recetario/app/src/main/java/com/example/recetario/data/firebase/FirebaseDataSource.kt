@@ -12,6 +12,8 @@ class FirebaseDataSource {
     private val ratingsCollection = db.collection("calificaciones")
     private val favoritesCollection = db.collection("favoritos")
 
+    private val usersCollection = db.collection("usuarios")
+
     // ====================================================================
     // GUARDADO (SUBIR A LA NUBE)
     // Todas devuelven Boolean: true si hubo éxito, false si falló (ej. sin internet)
@@ -47,6 +49,18 @@ class FirebaseDataSource {
             // Misma lógica que los ratings: ID único por usuario y receta
             val docId = "${favorite.ownerEmail}_${favorite.recipeId}"
             favoritesCollection.document(docId).set(favorite).await()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    suspend fun saveUserProfile(user: UserFirebase): Boolean {
+        return try {
+            // Usamos el email como ID exacto del documento.
+            // Si el usuario edita su perfil, .set() simplemente sobrescribe los datos.
+            usersCollection.document(user.email).set(user).await()
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -121,6 +135,18 @@ class FirebaseDataSource {
         } catch (e: Exception) {
             e.printStackTrace()
             false
+        }
+    }
+
+
+    suspend fun getUserProfile(email: String): UserFirebase? {
+        return try {
+            // Buscamos directamente por el ID (el correo), lo cual es rapidísimo
+            val snapshot = usersCollection.document(email).get().await()
+            snapshot.toObject(UserFirebase::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

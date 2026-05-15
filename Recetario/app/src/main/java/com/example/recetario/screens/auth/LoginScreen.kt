@@ -186,17 +186,15 @@ fun LoginScreen(
             text = "Iniciar Sesión",
             onClick = {
                 if (validateLogin()) {
-                    if (!userState.hasAnyRegisteredUser) {
-                        generalMessage = "Primero debes crear una cuenta."
-                    } else {
-                        authViewModel.login(email, password) { result ->
-                            if (!result.isValid) {
-                                generalMessage = "Correo o contraseña incorrectos."
-                            } else if (result.requiresBiometricSetup) {
-                                onBiometricSetupRequired()
-                            } else {
-                                onLoginClick()
-                            }
+                    // OFFLINE-FIRST: Eliminamos la restricción local.
+                    // Siempre dejamos que el ViewModel intente el login (local o nube).
+                    authViewModel.login(email, password) { result ->
+                        if (!result.isValid) {
+                            generalMessage = "Correo o contraseña incorrectos."
+                        } else if (result.requiresBiometricSetup) {
+                            onBiometricSetupRequired()
+                        } else {
+                            onLoginClick()
                         }
                     }
                 }
