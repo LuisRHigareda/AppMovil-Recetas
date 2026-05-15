@@ -38,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +52,7 @@ import com.example.recetario.screens.auth.OrangeButton
 import com.example.recetario.screens.auth.RecetarioLightGray
 import com.example.recetario.screens.auth.RecetarioOrange
 import com.example.recetario.screens.recipe.RecipeImagePreview
+import com.example.recetario.screens.recipe.SyncStatusIcon
 import com.example.recetario.ui.theme.RecetarioTheme
 import com.example.recetario.viewmodel.AuthViewModel
 import com.example.recetario.viewmodel.RecipeViewModel
@@ -714,12 +716,25 @@ private fun PublicRecipeCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = recipe.name,
-                    color = Color.Black,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = recipe.name,
+                        color = Color.Black,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    SyncStatusIcon(recipe = recipe)
+                }
 
                 Text(
                     text = recipe.category,
