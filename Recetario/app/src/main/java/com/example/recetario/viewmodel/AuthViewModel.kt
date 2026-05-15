@@ -9,6 +9,9 @@ import com.example.recetario.data.RecipeRepository
 import com.example.recetario.data.RegisterUserResult
 import com.example.recetario.data.UserPreferences
 import com.example.recetario.worker.SyncManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -75,7 +78,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             if(result.isValid){
                 // Lo lanzamos en una nueva corrutina para no bloquear la UI.
                 // El usuario entrará al Home y verá cómo las recetas aparecen mágicamente.
-                viewModelScope.launch {
+                CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                     recipeRepository.restoreUserDataFromCloud(email)
                 }
             }

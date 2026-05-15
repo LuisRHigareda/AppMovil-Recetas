@@ -86,7 +86,7 @@ fun ProfileScreen(
     var birthDateError by remember { mutableStateOf<String?>(null) }
     var genderError by remember { mutableStateOf<String?>(null) }
 
-    val publicRecipes = recipeUiState.publicRecipes
+    val publicRecipes = recipeUiState.visibleOwnRecipes
     val secretRecipes = recipeUiState.secretRecipes
     val favoriteActivity = recipeUiState.favoriteActivity
     val publicRecipeCount = recipeUiState.publicRecipeCount
@@ -361,7 +361,7 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(30.dp))
 
         Text(
-            text = "Mis recetas publicadas",
+            text = "Mis recetas",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black

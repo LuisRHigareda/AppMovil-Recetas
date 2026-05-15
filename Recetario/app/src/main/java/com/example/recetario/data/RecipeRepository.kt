@@ -67,8 +67,6 @@ class RecipeRepository(private val context: Context) {
 
         recipeDao.upsertRecipe(entity)
 
-        syncSingleRecipe(entity)
-
         // ¡GATILLO! Red de seguridad por si falla
         SyncManager.scheduleSync(context)
     }
@@ -83,8 +81,6 @@ class RecipeRepository(private val context: Context) {
         recipeDao.deleteRecipe(normalizedOwnerEmail, recipeId)
         recipeDao.deleteFavoriteForAllUsers(recipeId)
         recipeDao.deleteRatingForAllUsers(recipeId)
-
-        syncRecipeDeletion(recipeId)
 
         // ¡GATILLO! Red de seguridad
         SyncManager.scheduleSync(context)
@@ -108,7 +104,6 @@ class RecipeRepository(private val context: Context) {
             )
 
             recipeDao.insertFavorite(entity)
-            syncSingleFavorite(entity)
         }
 
         // ¡GATILLO! Cubre tanto si se agregó como si se borró
